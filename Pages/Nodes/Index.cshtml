@@ -1,0 +1,81 @@
+@page
+@model dependencies_visualizer.Pages.Nodes.IndexModel
+@{
+    ViewData["Title"] = "Nodes";
+}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2>@(Model.IsEditing ? "Edit Node" : "Define Node")</h2>
+        <form method="post" class="card p-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+            <input type="hidden" asp-for="Input.Id" />
+
+            <div class="mb-3">
+                <label asp-for="Input.Name" class="form-label"></label>
+                <input asp-for="Input.Name" class="form-control" />
+                <span asp-validation-for="Input.Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.Type" class="form-label">Type</label>
+                <select asp-for="Input.Type" class="form-select" asp-items="Model.NodeTypeOptions">
+                    <option value="">Select type</option>
+                </select>
+                <span asp-validation-for="Input.Type" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.Description" class="form-label"></label>
+                <textarea asp-for="Input.Description" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="Input.Description" class="text-danger"></span>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Node" : "Add Node")</button>
+                @if (Model.IsEditing)
+                {
+                    <a class="btn btn-outline-secondary" asp-page="/Nodes/Index">Cancel</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-7">
+        <h2>Existing Nodes</h2>
+        @if (!Model.Nodes.Any())
+        {
+            <p class="text-muted">No nodes created yet.</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var node in Model.Nodes)
+                {
+                    <tr>
+                        <td>@node.Name</td>
+                        <td>@node.Type</td>
+                        <td>@node.Description</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-editId="@node.Id">Edit</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

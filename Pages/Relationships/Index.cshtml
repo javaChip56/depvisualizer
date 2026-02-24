@@ -1,0 +1,90 @@
+@page
+@model dependencies_visualizer.Pages.Relationships.IndexModel
+@{
+    ViewData["Title"] = "Relationships";
+    var nodeLookup = Model.Nodes.ToDictionary(n => n.Id, n => n);
+}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2>@(Model.IsEditing ? "Edit Relationship" : "Define Relationship")</h2>
+
+        @if (Model.Nodes.Count < 2)
+        {
+            <p class="text-muted">Create at least 2 nodes before defining relationships.</p>
+        }
+        else
+        {
+            <form method="post" class="card p-3">
+                <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                <input type="hidden" asp-for="Input.Id" />
+
+                <div class="mb-3">
+                    <label asp-for="Input.SelectedNodeId" class="form-label">Selected Node</label>
+                    <select asp-for="Input.SelectedNodeId" class="form-select" asp-items="Model.NodeOptions"></select>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Input.RelationshipType" class="form-label">Relationship</label>
+                    <select asp-for="Input.RelationshipType" class="form-select">
+                        <option value="DependsOn">depends on</option>
+                        <option value="DependencyOf">dependency of</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Input.RelatedNodeId" class="form-label">Related Node</label>
+                    <select asp-for="Input.RelatedNodeId" class="form-select" asp-items="Model.NodeOptions"></select>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Relationship" : "Add Relationship")</button>
+                    @if (Model.IsEditing)
+                    {
+                        <a class="btn btn-outline-secondary" asp-page="/Relationships/Index">Cancel</a>
+                    }
+                </div>
+            </form>
+        }
+    </div>
+
+    <div class="col-lg-7">
+        <h2>Existing Relationships</h2>
+        @if (!Model.Relationships.Any())
+        {
+            <p class="text-muted">No relationships defined yet.</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Relationship</th>
+                        <th>Target</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var relationship in Model.Relationships)
+                {
+                    var source = nodeLookup[relationship.SourceNodeId];
+                    var target = nodeLookup[relationship.TargetNodeId];
+                    <tr>
+                        <td>@source.Name (@source.Type)</td>
+                        <td>@relationship.Label</td>
+                        <td>@target.Name (@target.Type)</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-editId="@relationship.Id">Edit</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

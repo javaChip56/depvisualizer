@@ -1,0 +1,101 @@
+@page
+@model dependencies_visualizer.Pages.Preview.IndexModel
+@{
+    ViewData["Title"] = "Preview";
+}
+
+<h2>Dependency Graph Preview</h2>
+
+<div id="cy" class="graph-surface"></div>
+
+@section Scripts {
+    <script src="https://unpkg.com/cytoscape@3.29.2/dist/cytoscape.min.js"></script>
+    <script>
+        const elements = @Html.Raw(Model.CytoscapeElementsJson);
+
+        function hasPresetPositions(graphElements) {
+            const nodeElements = graphElements
+                .filter(e => e.data && e.data.id && e.data.id.startsWith('n'));
+
+            if (nodeElements.length === 0) {
+                return false;
+            }
+
+            return nodeElements.every(e =>
+                e.position &&
+                Number.isFinite(e.position.x) &&
+                Number.isFinite(e.position.y));
+        }
+
+        async function savePositions(cy) {
+            const positions = {};
+            cy.nodes().forEach(node => {
+                const p = node.position();
+                positions[node.id()] = { x: p.x, y: p.y };
+            });
+
+            await fetch('@Url.Page("/Preview/Index", "SaveLayout")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(positions)
+            });
+        }
+
+        let saveTimer = null;
+        function queueSave(cy) {
+            if (saveTimer) {
+                clearTimeout(saveTimer);
+            }
+            saveTimer = setTimeout(() => {
+                savePositions(cy);
+            }, 250);
+        }
+
+        const shouldUsePreset = hasPresetPositions(elements);
+        const cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements,
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-opacity': 0,
+                        'border-width': 1,
+                        'border-color': '#495057',
+                        'shape': 'data(shape)',
+                        'label': 'data(label)',
+                        'font-size': '8px',
+                        'text-wrap': 'wrap',
+                        'text-max-width': '55px',
+                        'color': '#000000'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'curve-style': 'bezier',
+                        'target-arrow-shape': 'triangle',
+                        'line-color': '#6c757d',
+                        'target-arrow-color': '#6c757d',
+                        'width': 1,
+                        'label': 'data(label)',
+                        'font-size': '10px',
+                        'text-background-color': '#ffffff',
+                        'text-background-opacity': 1,
+                        'text-background-padding': '2px'
+                    }
+                }
+            ],
+            layout: {
+                name: shouldUsePreset ? 'preset' : 'cose',
+                fit: true,
+                padding: 20
+            }
+        });
+
+        cy.on('dragfree', 'node', () => queueSave(cy));
+        cy.on('layoutstop', () => queueSave(cy));
+    </script>
+}
