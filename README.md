@@ -46,9 +46,10 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - access member projects
   - manage nodes and relationships
 - Users only see projects where they are members
+- Project audit log is available per project (`Projects -> Audit`)
 
 ### Nodes
-- Create/edit nodes under a selected project
+- Create/edit/delete nodes under a selected project
 - Fields:
   - Name (unique per project, case-insensitive)
   - Type (from admin-managed node types)
@@ -60,14 +61,19 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - duplicate node names blocked within same project
   - parent must be compound type
   - parent cycles blocked
+- Delete safeguards:
+  - node delete is blocked if it still has relationships
+  - compound node delete is blocked if it still has child nodes
 - Duplicate node action in list:
   - creates `Name (Copy)`, `Name (Copy 2)`, etc.
+- Delete actions require user confirmation
 
 ### Relationships
-- Create/edit relationships under selected project
+- Create/edit/delete relationships under selected project
 - Prevents:
   - self-dependency
   - duplicate relationships
+- Delete actions require user confirmation
 
 ### Preview
 - Interactive Cytoscape graph preview per project
@@ -75,8 +81,9 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
 - Node visuals include:
   - shape (from node type)
   - line color and fill color (from node)
+  - regular nodes auto-expand horizontally to fit labels
 - Layout behavior:
-  - First load uses auto layout tuned for non-overlap and balanced spacing
+  - First load uses auto layout tuned for non-overlap and compact compound hierarchies
   - Node drag/layout changes are persisted
 - Role-aware layout persistence:
   - Maintainer saves shared project layout (visible to all members)
@@ -87,6 +94,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - Export PNG
   - Export JPG
   - Export SVG
+  - Contributor-only Reset Layout
 
 ## Data Storage Notes
 - Runtime entities are in-memory:
@@ -95,6 +103,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - nodes
   - relationships
   - layout positions
+  - project audit entries
 - App restart clears in-memory runtime data.
 - Node type definitions are persisted to JSON files:
   - `node-types.json`
@@ -136,7 +145,21 @@ Default dev URLs (from launch settings):
 5. Maintainer adds contributors/maintainers to project.
 6. Create nodes and relationships under that project.
 7. Open Preview, arrange graph, save layout automatically.
-8. Export graph as image if needed.
+8. Contributors can reset to maintainer layout if needed.
+9. Review project changes in `Projects -> Audit`.
+10. Export graph as image if needed.
+
+## Audit Logging
+- Audit entries are recorded per project.
+- Tracked events currently include:
+  - node create/update/duplicate/delete
+  - relationship create/update/delete
+- Each entry captures:
+  - timestamp (UTC)
+  - user
+  - action
+  - entity type
+  - details
 
 ## External Client-side Dependencies (CDN)
 - Cytoscape.js
