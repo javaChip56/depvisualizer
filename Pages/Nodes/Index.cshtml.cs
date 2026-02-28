@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 using dependencies_visualizer.Models;
 using dependencies_visualizer.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +53,16 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             ModelState.AddModelError(nameof(Input.Type), "Select a valid node type from configuration.");
         }
 
+        if (!Regex.IsMatch(Input.LineColor ?? string.Empty, "^#[0-9a-fA-F]{6}$"))
+        {
+            ModelState.AddModelError(nameof(Input.LineColor), "Select a valid line color.");
+        }
+
+        if (!Regex.IsMatch(Input.FillColor ?? string.Empty, "^#[0-9a-fA-F]{6}$"))
+        {
+            ModelState.AddModelError(nameof(Input.FillColor), "Select a valid fill color.");
+        }
+
         if (Input.ParentNodeId.HasValue)
         {
             if (Input.ParentNodeId.Value == Input.Id && Input.Id > 0)
@@ -90,6 +101,8 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 Name = Input.Name,
                 Type = Input.Type.Trim(),
                 ParentNodeId = Input.ParentNodeId,
+                LineColor = Input.LineColor ?? "#495057",
+                FillColor = Input.FillColor ?? "#ffffff",
                 Description = Input.Description
             }, out var updateError);
             if (!updated)
@@ -107,6 +120,8 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 Name = Input.Name,
                 Type = Input.Type.Trim(),
                 ParentNodeId = Input.ParentNodeId,
+                LineColor = Input.LineColor ?? "#495057",
+                FillColor = Input.FillColor ?? "#ffffff",
                 Description = Input.Description
             });
         }
@@ -142,6 +157,8 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 Name = editNode.Name,
                 Type = editNode.Type,
                 ParentNodeId = editNode.ParentNodeId,
+                LineColor = editNode.LineColor,
+                FillColor = editNode.FillColor,
                 Description = editNode.Description
             };
         }
@@ -233,6 +250,16 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
 
         [Display(Name = "Parent Compound Node")]
         public int? ParentNodeId { get; set; }
+
+        [Display(Name = "Line Color")]
+        [Required]
+        [RegularExpression("^#[0-9a-fA-F]{6}$")]
+        public string LineColor { get; set; } = "#495057";
+
+        [Display(Name = "Fill Color")]
+        [Required]
+        [RegularExpression("^#[0-9a-fA-F]{6}$")]
+        public string FillColor { get; set; } = "#ffffff";
 
         [StringLength(400)]
         public string? Description { get; set; }

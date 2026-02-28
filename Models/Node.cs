@@ -16,6 +16,14 @@ public sealed class Node
     [StringLength(100)]
     public string Type { get; set; } = string.Empty;
 
+    [Required]
+    [RegularExpression("^#[0-9a-fA-F]{6}$")]
+    public string LineColor { get; set; } = "#495057";
+
+    [Required]
+    [RegularExpression("^#[0-9a-fA-F]{6}$")]
+    public string FillColor { get; set; } = "#ffffff";
+
     [StringLength(400)]
     public string? Description { get; set; }
 }

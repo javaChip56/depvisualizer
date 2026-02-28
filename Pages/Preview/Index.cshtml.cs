@@ -42,7 +42,9 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
                 ["label"] = node.Name,
                 ["type"] = node.Type,
                 ["shape"] = _nodeShapeResolver.Resolve(node.Type),
-                ["isCompoundType"] = _nodeShapeResolver.IsCompoundType(node.Type)
+                ["isCompoundType"] = _nodeShapeResolver.IsCompoundType(node.Type),
+                ["lineColor"] = node.LineColor,
+                ["fillColor"] = node.FillColor
             };
             if (validParentLookup.TryGetValue(node.Id, out var parentId))
             {

@@ -90,9 +90,10 @@
                 {
                     selector: 'node',
                     style: {
-                        'background-opacity': 0,
+                        'background-color': 'data(fillColor)',
+                        'background-opacity': 1,
                         'border-width': 1,
-                        'border-color': '#495057',
+                        'border-color': 'data(lineColor)',
                         'shape': 'data(shape)',
                         'label': 'data(label)',
                         'text-valign': 'center',
@@ -106,8 +107,7 @@
                 {
                     selector: 'node:parent',
                     style: {
-                        'background-color': '#f8f9fa',
-                        'background-opacity': 0.25,
+                        'background-opacity': 0.2,
                         'border-style': 'dashed',
                         'text-valign': 'top',
                         'text-halign': 'center',

@@ -267,6 +267,8 @@ public sealed class DependencyRepository
                 ParentNodeId = node.ParentNodeId,
                 Name = node.Name.Trim(),
                 Type = node.Type.Trim(),
+                LineColor = NormalizeHexColor(node.LineColor, "#495057"),
+                FillColor = NormalizeHexColor(node.FillColor, "#ffffff"),
                 Description = string.IsNullOrWhiteSpace(node.Description) ? null : node.Description.Trim()
             };
 
@@ -290,6 +292,8 @@ public sealed class DependencyRepository
             existing.Name = node.Name.Trim();
             existing.Type = node.Type.Trim();
             existing.ParentNodeId = node.ParentNodeId;
+            existing.LineColor = NormalizeHexColor(node.LineColor, "#495057");
+            existing.FillColor = NormalizeHexColor(node.FillColor, "#ffffff");
             existing.Description = string.IsNullOrWhiteSpace(node.Description) ? null : node.Description.Trim();
             return true;
         }
@@ -451,6 +455,14 @@ public sealed class DependencyRepository
     private static string NormalizeUsername(string? username)
     {
         return username?.Trim() ?? string.Empty;
+    }
+
+    private static string NormalizeHexColor(string? color, string fallback)
+    {
+        var value = color?.Trim() ?? string.Empty;
+        return System.Text.RegularExpressions.Regex.IsMatch(value, "^#[0-9a-fA-F]{6}$")
+            ? value.ToLowerInvariant()
+            : fallback;
     }
 }
 

@@ -38,6 +38,19 @@
                 <span asp-validation-for="Input.Description" class="text-danger"></span>
             </div>
 
+            <div class="row g-3 mb-3">
+                <div class="col-6">
+                    <label asp-for="Input.LineColor" class="form-label"></label>
+                    <input asp-for="Input.LineColor" type="color" class="form-control form-control-color w-100" />
+                    <span asp-validation-for="Input.LineColor" class="text-danger"></span>
+                </div>
+                <div class="col-6">
+                    <label asp-for="Input.FillColor" class="form-label"></label>
+                    <input asp-for="Input.FillColor" type="color" class="form-control form-control-color w-100" />
+                    <span asp-validation-for="Input.FillColor" class="text-danger"></span>
+                </div>
+            </div>
+
             <div class="mb-3">
                 <label asp-for="Input.ParentNodeId" class="form-label"></label>
                 <select asp-for="Input.ParentNodeId" class="form-select" asp-items="Model.ParentNodeOptions">
@@ -70,6 +83,7 @@
                         <th>Name</th>
                         <th>Type</th>
                         <th>Parent</th>
+                        <th>Colors</th>
                         <th>Description</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -81,6 +95,10 @@
                         <td>@node.Name</td>
                         <td>@node.Type</td>
                         <td>@(node.ParentNodeId.HasValue && nodeLookup.TryGetValue(node.ParentNodeId.Value, out var parentNode) ? parentNode.Name : "-")</td>
+                        <td>
+                            <span title="Line" style="display:inline-block;width:14px;height:14px;border:2px solid @node.LineColor;background:#fff;border-radius:3px;"></span>
+                            <span title="Fill" style="display:inline-block;width:14px;height:14px;border:1px solid #adb5bd;background:@node.FillColor;border-radius:3px;margin-left:4px;"></span>
+                        </td>
                         <td>@node.Description</td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@node.Id">Edit</a>
