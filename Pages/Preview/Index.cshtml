@@ -11,12 +11,37 @@
 
 <h2>Dependency Graph Preview</h2>
 
+<div class="d-flex gap-2 flex-wrap mb-3">
+    <button id="btnRecenter" type="button" class="btn btn-outline-secondary btn-sm">Recenter</button>
+    <button id="btnExportPng" type="button" class="btn btn-outline-primary btn-sm">Export PNG</button>
+    <button id="btnExportJpg" type="button" class="btn btn-outline-primary btn-sm">Export JPG</button>
+    <button id="btnExportSvg" type="button" class="btn btn-outline-primary btn-sm">Export SVG</button>
+</div>
+
 <div id="cy" class="graph-surface"></div>
 
 @section Scripts {
     <script src="https://unpkg.com/cytoscape@3.29.2/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-svg/cytoscape-svg.js"></script>
     <script>
         const elements = @Html.Raw(Model.CytoscapeElementsJson);
+        const projectName = '@(Model.CurrentProject?.Name ?? "dependency-graph")';
+
+        function sanitizeFileName(name) {
+            return (name || "dependency-graph")
+                .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+                .replace(/\s+/g, "_")
+                .replace(/_+/g, "_");
+        }
+
+        function downloadDataUri(filename, dataUri) {
+            const a = document.createElement('a');
+            a.href = dataUri;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
 
         function hasPresetPositions(graphElements) {
             const nodeElements = graphElements
@@ -83,6 +108,10 @@
                 numIter: 1200
             };
 
+        if (window.cytoscape && window.cytoscapeSvg) {
+            window.cytoscape.use(window.cytoscapeSvg);
+        }
+
         const cy = cytoscape({
             container: document.getElementById('cy'),
             elements,
@@ -135,5 +164,33 @@
 
         cy.on('dragfree', 'node', () => queueSave(cy));
         cy.on('layoutstop', () => queueSave(cy));
+
+        document.getElementById('btnRecenter')?.addEventListener('click', () => {
+            cy.fit(undefined, 30);
+            cy.center();
+        });
+
+        document.getElementById('btnExportPng')?.addEventListener('click', () => {
+            const dataUri = cy.png({ full: true, scale: 2, bg: '#ffffff' });
+            downloadDataUri(`${sanitizeFileName(projectName)}.png`, dataUri);
+        });
+
+        document.getElementById('btnExportJpg')?.addEventListener('click', () => {
+            const dataUri = cy.jpg({ full: true, scale: 2, bg: '#ffffff', quality: 0.95 });
+            downloadDataUri(`${sanitizeFileName(projectName)}.jpg`, dataUri);
+        });
+
+        document.getElementById('btnExportSvg')?.addEventListener('click', () => {
+            if (typeof cy.svg !== 'function') {
+                alert('SVG export is not available in this browser right now.');
+                return;
+            }
+
+            const svg = cy.svg({ full: true, scale: 1, bg: '#ffffff' });
+            const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            downloadDataUri(`${sanitizeFileName(projectName)}.svg`, svgUrl);
+            setTimeout(() => URL.revokeObjectURL(svgUrl), 1000);
+        });
     </script>
 }
