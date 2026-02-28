@@ -4,11 +4,17 @@
     ViewData["Title"] = "Nodes";
 }
 
+<p class="text-muted mb-3">
+    Project: <strong>@Model.CurrentProject?.Name</strong>
+    <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
+</p>
+
 <div class="row g-4">
     <div class="col-lg-5">
         <h2>@(Model.IsEditing ? "Edit Node" : "Define Node")</h2>
         <form method="post" class="card p-3">
             <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+            <input type="hidden" asp-for="ProjectId" />
             <input type="hidden" asp-for="Input.Id" />
 
             <div class="mb-3">
@@ -35,7 +41,7 @@
                 <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Node" : "Add Node")</button>
                 @if (Model.IsEditing)
                 {
-                    <a class="btn btn-outline-secondary" asp-page="/Nodes/Index">Cancel</a>
+                    <a class="btn btn-outline-secondary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId">Cancel</a>
                 }
             </div>
         </form>
@@ -66,7 +72,7 @@
                         <td>@node.Type</td>
                         <td>@node.Description</td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-editId="@node.Id">Edit</a>
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@node.Id">Edit</a>
                         </td>
                     </tr>
                 }

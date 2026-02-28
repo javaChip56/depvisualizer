@@ -5,6 +5,11 @@
     var nodeLookup = Model.Nodes.ToDictionary(n => n.Id, n => n);
 }
 
+<p class="text-muted mb-3">
+    Project: <strong>@Model.CurrentProject?.Name</strong>
+    <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
+</p>
+
 <div class="row g-4">
     <div class="col-lg-5">
         <h2>@(Model.IsEditing ? "Edit Relationship" : "Define Relationship")</h2>
@@ -17,6 +22,7 @@
         {
             <form method="post" class="card p-3">
                 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                <input type="hidden" asp-for="ProjectId" />
                 <input type="hidden" asp-for="Input.Id" />
 
                 <div class="mb-3">
@@ -41,7 +47,7 @@
                     <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Relationship" : "Add Relationship")</button>
                     @if (Model.IsEditing)
                     {
-                        <a class="btn btn-outline-secondary" asp-page="/Relationships/Index">Cancel</a>
+                        <a class="btn btn-outline-secondary" asp-page="/Relationships/Index" asp-route-projectId="@Model.ProjectId">Cancel</a>
                     }
                 </div>
             </form>
@@ -75,7 +81,7 @@
                         <td>@relationship.Label</td>
                         <td>@target.Name (@target.Type)</td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-editId="@relationship.Id">Edit</a>
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@relationship.Id">Edit</a>
                         </td>
                     </tr>
                 }

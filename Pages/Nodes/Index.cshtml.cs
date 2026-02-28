@@ -16,19 +16,34 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
     public NodeInputModel Input { get; set; } = new();
 
     [BindProperty(SupportsGet = true)]
+    public int? ProjectId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public int? EditId { get; set; }
 
     public IReadOnlyList<Node> Nodes { get; private set; } = [];
+    public Project? CurrentProject { get; private set; }
     public IEnumerable<SelectListItem> NodeTypeOptions { get; private set; } = [];
     public bool IsEditing => EditId.HasValue;
 
-    public void OnGet()
+    public IActionResult OnGet()
     {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
         LoadData();
+        return Page();
     }
 
     public IActionResult OnPost()
     {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
         if (!_nodeTypeCatalog.IsValid(Input.Type))
         {
             ModelState.AddModelError(nameof(Input.Type), "Select a valid node type from configuration.");
@@ -43,7 +58,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
 
         if (Input.Id > 0)
         {
-            var updated = _repository.UpdateNode(Input.Id, new Node
+            var updated = _repository.UpdateNode(ProjectId!.Value, Input.Id, new Node
             {
                 Name = Input.Name,
                 Type = Input.Type.Trim(),
@@ -59,7 +74,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
         else
         {
-            _repository.AddNode(new Node
+            _repository.AddNode(ProjectId!.Value, new Node
             {
                 Name = Input.Name,
                 Type = Input.Type.Trim(),
@@ -67,19 +82,19 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             });
         }
 
-        return RedirectToPage();
+        return RedirectToPage(new { projectId = ProjectId });
     }
 
     private void LoadData(bool preservePostedInput = false)
     {
-        Nodes = _repository.GetNodes();
+        Nodes = _repository.GetNodes(ProjectId!.Value);
         NodeTypeOptions = _nodeTypeCatalog
             .GetNodeTypes()
             .Select(t => new SelectListItem(t, t));
 
         if (EditId.HasValue && !preservePostedInput)
         {
-            var editNode = _repository.GetNodeById(EditId.Value);
+            var editNode = _repository.GetNodeById(ProjectId!.Value, EditId.Value);
             if (editNode is null)
             {
                 EditId = null;
@@ -94,6 +109,40 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 Description = editNode.Description
             };
         }
+    }
+
+    private bool TryLoadProjectAndAuthorize(out IActionResult? redirect)
+    {
+        redirect = null;
+
+        if (!ProjectId.HasValue)
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        var username = User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            redirect = RedirectToPage("/Account/Login");
+            return false;
+        }
+
+        var isAdmin = User.IsInRole("Admin");
+        if (!_repository.UserCanAccessProject(ProjectId.Value, username, isAdmin))
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        CurrentProject = _repository.GetProjectById(ProjectId.Value);
+        if (CurrentProject is null)
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        return true;
     }
 
     public sealed class NodeInputModel

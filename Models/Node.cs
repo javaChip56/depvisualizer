@@ -5,6 +5,7 @@ namespace dependencies_visualizer.Models;
 public sealed class Node
 {
     public int Id { get; init; }
+    public int ProjectId { get; init; }
 
     [Required]
     [StringLength(100)]

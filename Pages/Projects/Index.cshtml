@@ -1,0 +1,163 @@
+@page
+@model dependencies_visualizer.Pages.Projects.IndexModel
+@{
+    ViewData["Title"] = "Projects";
+}
+
+<h1>Projects</h1>
+<p class="text-muted">Maintainers can manage project details and members. Contributors can manage nodes and relationships.</p>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2 class="h4">Create Project</h2>
+        <form method="post" asp-page-handler="CreateProject" class="card p-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+            <div class="mb-3">
+                <label asp-for="CreateInput.Name" class="form-label"></label>
+                <input asp-for="CreateInput.Name" class="form-control" />
+                <span asp-validation-for="CreateInput.Name" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="CreateInput.Description" class="form-label"></label>
+                <textarea asp-for="CreateInput.Description" class="form-control" rows="4"></textarea>
+                <span asp-validation-for="CreateInput.Description" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Project</button>
+        </form>
+        <div class="small text-muted mt-2">
+            Suggested details: scope, owning team, environment, key external dependencies.
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <h2 class="h4">My Projects</h2>
+        @if (!Model.Projects.Any())
+        {
+            <p class="text-muted">No projects found. Create your first project.</p>
+        }
+        else
+        {
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Description</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Projects)
+                {
+                    var project = item.Project;
+                    <tr>
+                        <td>@project.Name</td>
+                        <td>@item.Role</td>
+                        <td>@project.Description</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-projectId="@project.Id">Nodes</a>
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@project.Id">Relationships</a>
+                            <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-projectId="@project.Id">Preview</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@project.Id">Open</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@if (Model.ManagedProject is not null)
+{
+    <hr class="my-4" />
+    <h2 class="h4">Project: @Model.ManagedProject.Name</h2>
+    <p class="text-muted mb-3">Owner: @Model.ManagedProject.OwnerUsername</p>
+
+    @if (!Model.CanManageSelectedProject)
+    {
+        <p class="text-muted">You are a contributor for this project. Project settings and membership are maintainer-only.</p>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <h3 class="h5">Edit Project Details</h3>
+                <form method="post" asp-page-handler="UpdateProject" class="card p-3">
+                    <input type="hidden" asp-for="UpdateInput.ProjectId" />
+                    <div class="mb-3">
+                        <label asp-for="UpdateInput.Name" class="form-label"></label>
+                        <input asp-for="UpdateInput.Name" class="form-control" />
+                        <span asp-validation-for="UpdateInput.Name" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="UpdateInput.Description" class="form-label"></label>
+                        <textarea asp-for="UpdateInput.Description" class="form-control" rows="4"></textarea>
+                        <span asp-validation-for="UpdateInput.Description" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </form>
+            </div>
+
+            <div class="col-lg-6">
+                <h3 class="h5">Add Member</h3>
+                <form method="post" asp-page-handler="AddMember" class="card p-3 mb-3">
+                    <input type="hidden" asp-for="MemberInput.ProjectId" />
+                    <div class="mb-3">
+                        <label asp-for="MemberInput.Username" class="form-label"></label>
+                        <select asp-for="MemberInput.Username" asp-items="Model.MemberUserOptions" class="form-select">
+                            <option value="">Select user</option>
+                        </select>
+                        <span asp-validation-for="MemberInput.Username" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="MemberInput.Role" class="form-label"></label>
+                        <select asp-for="MemberInput.Role" class="form-select">
+                            <option value="Maintainer">Maintainer</option>
+                            <option value="Contributor">Contributor</option>
+                        </select>
+                        <span asp-validation-for="MemberInput.Role" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Member</button>
+                </form>
+
+                <h3 class="h5 text-danger">Delete Project</h3>
+                <form method="post" asp-page-handler="DeleteProject" class="card p-3 border-danger-subtle">
+                    <input type="hidden" asp-for="DeleteInput.ProjectId" />
+                    <p class="small text-muted mb-2">This deletes all nodes, relationships, and saved layout positions in this project.</p>
+                    <button type="submit" class="btn btn-outline-danger">Delete Project</button>
+                </form>
+            </div>
+        </div>
+    }
+
+    <h3 class="h5 mt-4">Members</h3>
+    @if (!Model.Members.Any())
+    {
+        <p class="text-muted">No members found.</p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var member in Model.Members)
+            {
+                <tr>
+                    <td>@member.Username</td>
+                    <td>@member.Role</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

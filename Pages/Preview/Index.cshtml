@@ -4,6 +4,11 @@
     ViewData["Title"] = "Preview";
 }
 
+<p class="text-muted mb-3">
+    Project: <strong>@Model.CurrentProject?.Name</strong>
+    <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
+</p>
+
 <h2>Dependency Graph Preview</h2>
 
 <div id="cy" class="graph-surface"></div>
@@ -34,7 +39,7 @@
                 positions[node.id()] = { x: p.x, y: p.y };
             });
 
-            await fetch('@Url.Page("/Preview/Index", "SaveLayout")', {
+            await fetch('@Url.Page("/Preview/Index", "SaveLayout", new { projectId = Model.ProjectId })', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
