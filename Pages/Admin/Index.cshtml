@@ -54,7 +54,7 @@
                     <td class="text-end">
                         <form method="post" asp-page-handler="ToggleSuspension" class="d-inline" onsubmit="return confirm('@(user.IsSuspended ? "Unsuspend this user?" : "Suspend this user?")');">
                             <input type="hidden" name="ToggleInput.Username" value="@user.Username" />
-                            <input type="hidden" name="ToggleInput.Suspend" value="@(!user.IsSuspended).ToString().ToLowerInvariant()" />
+                            <input type="hidden" name="ToggleInput.Suspend" value="@(user.IsSuspended ? "false" : "true")" />
                             <button type="submit" class="btn btn-sm @(user.IsSuspended ? "btn-outline-success" : "btn-outline-warning")" title="@(user.IsSuspended ? "Unsuspend" : "Suspend")" aria-label="@(user.IsSuspended ? "Unsuspend" : "Suspend")">
                                 @if (user.IsSuspended)
                                 {
