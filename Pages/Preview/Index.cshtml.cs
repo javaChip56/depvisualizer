@@ -16,6 +16,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
     public int? ProjectId { get; set; }
 
     public Project? CurrentProject { get; private set; }
+    public bool IsMaintainer { get; private set; }
     public string CytoscapeElementsJson { get; private set; } = "[]";
 
     public IActionResult OnGet()
@@ -28,7 +29,11 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         var nodes = _repository.GetNodes(ProjectId!.Value);
         var relationships = _repository.GetRelationships(ProjectId!.Value);
         var nodeIds = nodes.Select(n => $"n{n.Id}").ToList();
-        var savedPositions = _repository.GetLayoutPositions(ProjectId.Value, nodeIds);
+        var savedPositions = _repository.GetLayoutPositions(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            User.IsInRole("Admin"),
+            nodeIds);
         var validParentLookup = BuildValidParentLookup(nodes);
 
         var elements = new List<object>();
@@ -106,9 +111,38 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
                 double.IsFinite(p.Value.Y))
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
 
-        _repository.SaveLayoutPositions(ProjectId.Value, filtered);
+        var saved = _repository.SaveLayoutPositions(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            User.IsInRole("Admin"),
+            filtered,
+            out var saveError);
+        if (!saved)
+        {
+            return new JsonResult(new { success = false, error = saveError ?? "Unable to save layout." });
+        }
 
         return new JsonResult(new { success = true, saved = filtered.Count });
+    }
+
+    public IActionResult OnPostResetLayout()
+    {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
+        var reset = _repository.ResetContributorLayout(
+            ProjectId!.Value,
+            User.Identity!.Name!,
+            User.IsInRole("Admin"),
+            out var error);
+        if (!reset)
+        {
+            return new JsonResult(new { success = false, error = error ?? "Unable to reset layout." });
+        }
+
+        return new JsonResult(new { success = true });
     }
 
     private bool TryLoadProjectAndAuthorize(out IActionResult? redirect)
@@ -134,6 +168,8 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
             redirect = RedirectToPage("/Projects/Index");
             return false;
         }
+
+        IsMaintainer = _repository.UserCanManageProject(ProjectId.Value, username, isAdmin);
 
         CurrentProject = _repository.GetProjectById(ProjectId.Value);
         if (CurrentProject is null)

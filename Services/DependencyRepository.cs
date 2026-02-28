@@ -9,7 +9,8 @@ public sealed class DependencyRepository
     private readonly Dictionary<int, Dictionary<string, ProjectMemberRole>> _projectMembersByProjectId = [];
     private readonly List<Node> _nodes = [];
     private readonly List<DependencyRelationship> _relationships = [];
-    private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _layoutPositionsByProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _maintainerLayoutByProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, Dictionary<string, NodeLayoutPosition>>> _contributorLayoutByProjectId = [];
     private int _nextProjectId = 1;
     private int _nextNodeId = 1;
     private int _nextRelationshipId = 1;
@@ -146,7 +147,8 @@ public sealed class DependencyRepository
             _projectMembersByProjectId.Remove(projectId);
             _nodes.RemoveAll(n => n.ProjectId == projectId);
             _relationships.RemoveAll(r => r.ProjectId == projectId);
-            _layoutPositionsByProjectId.Remove(projectId);
+            _maintainerLayoutByProjectId.Remove(projectId);
+            _contributorLayoutByProjectId.Remove(projectId);
             return true;
         }
     }
@@ -365,11 +367,40 @@ public sealed class DependencyRepository
         }
     }
 
-    public IReadOnlyDictionary<string, NodeLayoutPosition> GetLayoutPositions(int projectId, IEnumerable<string> nodeIds)
+    public IReadOnlyDictionary<string, NodeLayoutPosition> GetLayoutPositions(
+        int projectId,
+        string username,
+        bool isAdmin,
+        IEnumerable<string> nodeIds)
     {
+        var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            if (!_layoutPositionsByProjectId.TryGetValue(projectId, out var positionsByNodeId))
+            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            if (role == ProjectMemberRole.None)
+            {
+                return new Dictionary<string, NodeLayoutPosition>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            Dictionary<string, NodeLayoutPosition>? positionsByNodeId = null;
+            if (role == ProjectMemberRole.Maintainer)
+            {
+                _maintainerLayoutByProjectId.TryGetValue(projectId, out positionsByNodeId);
+            }
+            else
+            {
+                if (_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts) &&
+                    contributorLayouts.TryGetValue(normalizedUsername, out var contributorPositions))
+                {
+                    positionsByNodeId = contributorPositions;
+                }
+                else
+                {
+                    _maintainerLayoutByProjectId.TryGetValue(projectId, out positionsByNodeId);
+                }
+            }
+
+            if (positionsByNodeId is null)
             {
                 return new Dictionary<string, NodeLayoutPosition>(StringComparer.OrdinalIgnoreCase);
             }
@@ -381,11 +412,71 @@ public sealed class DependencyRepository
         }
     }
 
-    public void SaveLayoutPositions(int projectId, IDictionary<string, NodeLayoutPosition> positions)
+    public bool SaveLayoutPositions(
+        int projectId,
+        string username,
+        bool isAdmin,
+        IDictionary<string, NodeLayoutPosition> positions,
+        out string? error)
     {
+        error = null;
+        var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            _layoutPositionsByProjectId[projectId] = new Dictionary<string, NodeLayoutPosition>(positions, StringComparer.OrdinalIgnoreCase);
+            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            if (role == ProjectMemberRole.None)
+            {
+                error = "Access denied.";
+                return false;
+            }
+
+            var clonedPositions = new Dictionary<string, NodeLayoutPosition>(positions, StringComparer.OrdinalIgnoreCase);
+            if (role == ProjectMemberRole.Maintainer)
+            {
+                _maintainerLayoutByProjectId[projectId] = clonedPositions;
+                return true;
+            }
+
+            if (!_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts))
+            {
+                contributorLayouts = new Dictionary<string, Dictionary<string, NodeLayoutPosition>>(StringComparer.OrdinalIgnoreCase);
+                _contributorLayoutByProjectId[projectId] = contributorLayouts;
+            }
+
+            contributorLayouts[normalizedUsername] = clonedPositions;
+            return true;
+        }
+    }
+
+    public bool ResetContributorLayout(int projectId, string username, bool isAdmin, out string? error)
+    {
+        error = null;
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            if (role == ProjectMemberRole.None)
+            {
+                error = "Access denied.";
+                return false;
+            }
+
+            if (role == ProjectMemberRole.Maintainer)
+            {
+                error = "Maintainers use the shared project layout.";
+                return false;
+            }
+
+            if (_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts))
+            {
+                contributorLayouts.Remove(normalizedUsername);
+                if (contributorLayouts.Count == 0)
+                {
+                    _contributorLayoutByProjectId.Remove(projectId);
+                }
+            }
+
+            return true;
         }
     }
 

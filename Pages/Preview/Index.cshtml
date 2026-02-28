@@ -16,7 +16,16 @@
     <button id="btnExportPng" type="button" class="btn btn-outline-primary btn-sm">Export PNG</button>
     <button id="btnExportJpg" type="button" class="btn btn-outline-primary btn-sm">Export JPG</button>
     <button id="btnExportSvg" type="button" class="btn btn-outline-primary btn-sm">Export SVG</button>
+    @if (!Model.IsMaintainer)
+    {
+        <button id="btnResetLayout" type="button" class="btn btn-outline-warning btn-sm">Reset Layout</button>
+    }
 </div>
+<p class="text-muted small">
+    @(Model.IsMaintainer
+        ? "Layout changes are shared with all project members."
+        : "Layout changes are personal to your account. Use Reset Layout to revert to the maintainer layout.")
+</p>
 
 <div id="cy" class="graph-surface"></div>
 
@@ -26,6 +35,7 @@
     <script>
         const elements = @Html.Raw(Model.CytoscapeElementsJson);
         const projectName = '@(Model.CurrentProject?.Name ?? "dependency-graph")';
+        const isMaintainer = @Model.IsMaintainer.ToString().ToLowerInvariant();
 
         function sanitizeFileName(name) {
             return (name || "dependency-graph")
@@ -64,13 +74,22 @@
                 positions[node.id()] = { x: p.x, y: p.y };
             });
 
-            await fetch('@Url.Page("/Preview/Index", "SaveLayout", new { projectId = Model.ProjectId })', {
+            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "SaveLayout", new { projectId = Model.ProjectId }))', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(positions)
             });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+            if (!payload.success) {
+                console.warn(payload.error || 'Unable to save layout.');
+            }
         }
 
         let saveTimer = null;
@@ -191,6 +210,28 @@
             const svgUrl = URL.createObjectURL(svgBlob);
             downloadDataUri(`${sanitizeFileName(projectName)}.svg`, svgUrl);
             setTimeout(() => URL.revokeObjectURL(svgUrl), 1000);
+        });
+
+        document.getElementById('btnResetLayout')?.addEventListener('click', async () => {
+            if (isMaintainer) {
+                return;
+            }
+
+            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "ResetLayout", new { projectId = Model.ProjectId }))', {
+                method: 'POST'
+            });
+            if (!response.ok) {
+                alert('Unable to reset layout.');
+                return;
+            }
+
+            const payload = await response.json();
+            if (!payload.success) {
+                alert(payload.error || 'Unable to reset layout.');
+                return;
+            }
+
+            window.location.reload();
         });
     </script>
 }
