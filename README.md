@@ -107,7 +107,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
 {
   "AuthDefaults": {
     "AdminUsername": "admin",
-    "AdminPassword": "Admin@123"
+    "AdminPassword": "redacted"
   }
 }
 ```
