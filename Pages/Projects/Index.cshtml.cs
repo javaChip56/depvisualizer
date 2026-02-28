@@ -25,6 +25,10 @@ public sealed class IndexModel(DependencyRepository repository, UserAccountServi
     [ValidateNever]
     public AddMemberInputModel MemberInput { get; set; } = new();
 
+    [BindProperty]
+    [ValidateNever]
+    public RemoveMemberInputModel RemoveMemberInput { get; set; } = new();
+
     [BindProperty(SupportsGet = true)]
     public int? ManageProjectId { get; set; }
 
@@ -155,7 +159,54 @@ public sealed class IndexModel(DependencyRepository repository, UserAccountServi
             return Page();
         }
 
+        _repository.AddAuditEntry(
+            MemberInput.ProjectId,
+            username,
+            "Update",
+            "ProjectMember",
+            $"Set member '{MemberInput.Username}' as {MemberInput.Role}.");
+
         return RedirectToPage(new { manageProjectId = MemberInput.ProjectId });
+    }
+
+    public IActionResult OnPostRemoveMember()
+    {
+        ModelState.Clear();
+        if (!TryValidateModel(RemoveMemberInput, nameof(RemoveMemberInput)))
+        {
+            ManageProjectId = RemoveMemberInput.ProjectId > 0 ? RemoveMemberInput.ProjectId : null;
+            LoadPageData();
+            return Page();
+        }
+
+        var (username, isAdmin) = GetActor();
+        if (username is null)
+        {
+            return RedirectToPage("/Account/Login");
+        }
+
+        var removed = _repository.RemoveMember(
+            RemoveMemberInput.ProjectId,
+            username,
+            isAdmin,
+            RemoveMemberInput.Username,
+            out var error);
+        if (!removed)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Unable to remove member.");
+            ManageProjectId = RemoveMemberInput.ProjectId;
+            LoadPageData();
+            return Page();
+        }
+
+        _repository.AddAuditEntry(
+            RemoveMemberInput.ProjectId,
+            username,
+            "Delete",
+            "ProjectMember",
+            $"Removed member '{RemoveMemberInput.Username}' from project.");
+
+        return RedirectToPage(new { manageProjectId = RemoveMemberInput.ProjectId });
     }
 
     private (string? Username, bool IsAdmin) GetActor()
@@ -213,6 +264,11 @@ public sealed class IndexModel(DependencyRepository repository, UserAccountServi
                 MemberInput.ProjectId = ManagedProject.Id;
             }
 
+            if (RemoveMemberInput.ProjectId == 0)
+            {
+                RemoveMemberInput.ProjectId = ManagedProject.Id;
+            }
+
             if (DeleteInput.ProjectId == 0)
             {
                 DeleteInput.ProjectId = ManagedProject.Id;
@@ -260,5 +316,15 @@ public sealed class IndexModel(DependencyRepository repository, UserAccountServi
 
         [Required]
         public ProjectMemberRole Role { get; set; } = ProjectMemberRole.Contributor;
+    }
+
+    public sealed class RemoveMemberInputModel
+    {
+        [Required]
+        public int ProjectId { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Username { get; set; } = string.Empty;
     }
 }

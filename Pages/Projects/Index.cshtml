@@ -2,6 +2,7 @@
 @model dependencies_visualizer.Pages.Projects.IndexModel
 @{
     ViewData["Title"] = "Projects";
+    var currentUsername = User.Identity?.Name ?? string.Empty;
 }
 
 <h1>Projects</h1>
@@ -154,6 +155,10 @@
                 <tr>
                     <th>Username</th>
                     <th>Role</th>
+                    @if (Model.CanManageSelectedProject)
+                    {
+                        <th class="text-end">Actions</th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -162,6 +167,22 @@
                 <tr>
                     <td>@member.Username</td>
                     <td>@member.Role</td>
+                    @if (Model.CanManageSelectedProject)
+                    {
+                        var isCurrentUser = string.Equals(member.Username, currentUsername, StringComparison.OrdinalIgnoreCase);
+                        <td class="text-end">
+                            @if (!isCurrentUser)
+                            {
+                                <form method="post" asp-page-handler="RemoveMember" class="d-inline" onsubmit="return confirm('Remove this user from the project?');">
+                                    <input type="hidden" name="RemoveMemberInput.ProjectId" value="@Model.ManagedProject?.Id" />
+                                    <input type="hidden" name="RemoveMemberInput.Username" value="@member.Username" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" aria-label="Remove">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    }
                 </tr>
             }
             </tbody>

@@ -257,6 +257,57 @@ public sealed class DependencyRepository
         }
     }
 
+    public bool RemoveMember(
+        int projectId,
+        string actorUsername,
+        bool actorIsAdmin,
+        string memberUsername,
+        out string? error)
+    {
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+        var normalizedMember = NormalizeUsername(memberUsername);
+        if (string.IsNullOrWhiteSpace(normalizedMember))
+        {
+            error = "Username is required.";
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            if (GetRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            {
+                error = "Only maintainers can manage members.";
+                return false;
+            }
+
+            if (!_projectMembersByProjectId.TryGetValue(projectId, out var members))
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            if (!members.TryGetValue(normalizedMember, out var existingRole))
+            {
+                error = "Member not found in project.";
+                return false;
+            }
+
+            if (existingRole == ProjectMemberRole.Maintainer)
+            {
+                var maintainerCount = members.Count(m => m.Value == ProjectMemberRole.Maintainer);
+                if (maintainerCount <= 1)
+                {
+                    error = "A project must have at least one maintainer.";
+                    return false;
+                }
+            }
+
+            members.Remove(normalizedMember);
+            return true;
+        }
+    }
+
     public IReadOnlyList<Node> GetNodes(int projectId)
     {
         lock (_syncRoot)

@@ -36,7 +36,7 @@ public sealed class UserAccountService
         {
             return _users.Values
                 .OrderBy(u => u.Username)
-                .Select(u => new UserSummary(u.Username, u.IsAdmin, u.MustChangePassword))
+                .Select(u => new UserSummary(u.Username, u.IsAdmin, u.MustChangePassword, u.IsSuspended))
                 .ToList();
         }
     }
@@ -75,13 +75,15 @@ public sealed class UserAccountService
         }
     }
 
-    public bool ValidateCredentials(string username, string password, out AuthenticatedUser? user)
+    public bool ValidateCredentials(string username, string password, out AuthenticatedUser? user, out string? error)
     {
         user = null;
+        error = null;
         var normalizedUsername = NormalizeUsername(username);
 
         if (string.IsNullOrWhiteSpace(normalizedUsername))
         {
+            error = "Invalid username or password.";
             return false;
         }
 
@@ -89,12 +91,20 @@ public sealed class UserAccountService
         {
             if (!_users.TryGetValue(normalizedUsername, out var account))
             {
+                error = "Invalid username or password.";
+                return false;
+            }
+
+            if (account.IsSuspended)
+            {
+                error = "This account is suspended. Contact an admin.";
                 return false;
             }
 
             var verification = _passwordHasher.VerifyHashedPassword(account, account.PasswordHash, password);
             if (verification == PasswordVerificationResult.Failed)
             {
+                error = "Invalid username or password.";
                 return false;
             }
 
@@ -103,7 +113,7 @@ public sealed class UserAccountService
                 account.PasswordHash = _passwordHasher.HashPassword(account, password);
             }
 
-            user = new AuthenticatedUser(account.Username, account.IsAdmin, account.MustChangePassword);
+            user = new AuthenticatedUser(account.Username, account.IsAdmin, account.MustChangePassword, account.IsSuspended);
             return true;
         }
     }
@@ -162,7 +172,40 @@ public sealed class UserAccountService
                 return null;
             }
 
-            return new AuthenticatedUser(account.Username, account.IsAdmin, account.MustChangePassword);
+            return new AuthenticatedUser(account.Username, account.IsAdmin, account.MustChangePassword, account.IsSuspended);
+        }
+    }
+
+    public bool SetSuspended(string username, bool isSuspended, out string? error)
+    {
+        error = null;
+        var normalizedUsername = NormalizeUsername(username);
+        if (string.IsNullOrWhiteSpace(normalizedUsername))
+        {
+            error = "Invalid user.";
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            if (!_users.TryGetValue(normalizedUsername, out var account))
+            {
+                error = "User not found.";
+                return false;
+            }
+
+            if (account.IsAdmin && isSuspended)
+            {
+                var activeAdminCount = _users.Values.Count(u => u.IsAdmin && !u.IsSuspended);
+                if (activeAdminCount <= 1)
+                {
+                    error = "Cannot suspend the last active admin.";
+                    return false;
+                }
+            }
+
+            account.IsSuspended = isSuspended;
+            return true;
         }
     }
 
@@ -172,9 +215,9 @@ public sealed class UserAccountService
     }
 }
 
-public sealed record AuthenticatedUser(string Username, bool IsAdmin, bool MustChangePassword);
+public sealed record AuthenticatedUser(string Username, bool IsAdmin, bool MustChangePassword, bool IsSuspended);
 
-public sealed record UserSummary(string Username, bool IsAdmin, bool MustChangePassword);
+public sealed record UserSummary(string Username, bool IsAdmin, bool MustChangePassword, bool IsSuspended);
 
 internal sealed class UserAccount(string username, bool isAdmin, bool mustChangePassword, string passwordHash)
 {
@@ -183,6 +226,8 @@ internal sealed class UserAccount(string username, bool isAdmin, bool mustChange
     public bool IsAdmin { get; } = isAdmin;
 
     public bool MustChangePassword { get; set; } = mustChangePassword;
+
+    public bool IsSuspended { get; set; }
 
     public string PasswordHash { get; set; } = passwordHash;
 }

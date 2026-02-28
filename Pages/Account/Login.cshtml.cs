@@ -35,10 +35,10 @@ public sealed class LoginModel(UserAccountService userAccountService) : PageMode
             return Page();
         }
 
-        var valid = _userAccountService.ValidateCredentials(Input.Username, Input.Password, out var user);
+        var valid = _userAccountService.ValidateCredentials(Input.Username, Input.Password, out var user, out var error);
         if (!valid || user is null)
         {
-            ModelState.AddModelError(string.Empty, "Invalid username or password.");
+            ModelState.AddModelError(string.Empty, error ?? "Invalid username or password.");
             return Page();
         }
 

@@ -1,4 +1,5 @@
 using dependencies_visualizer.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,22 @@ app.UseRouting();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var username = context.User.Identity.Name;
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            var userAccountService = context.RequestServices.GetRequiredService<UserAccountService>();
+            var user = userAccountService.GetUser(username);
+            if (user is null || user.IsSuspended)
+            {
+                await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                context.Response.Redirect("/Account/Login");
+                return;
+            }
+        }
+    }
+
     var mustChangePassword = string.Equals(
         context.User.FindFirst(AuthClaimTypes.MustChangePassword)?.Value,
         bool.TrueString,
