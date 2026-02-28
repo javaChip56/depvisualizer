@@ -1,8 +1,72 @@
 @page
 @model dependencies_visualizer.Pages.Nodes.IndexModel
+@using System.Text.Json
 @{
     ViewData["Title"] = "Nodes";
-    var nodeLookup = Model.Nodes.ToDictionary(n => n.Id, n => n);
+    var nodesByParent = Model.Nodes
+        .OrderBy(n => n.Name)
+        .ToLookup(n => n.ParentNodeId);
+
+    Dictionary<string, object?> ToTabulatorRow(dependencies_visualizer.Models.Node node)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["id"] = node.Id,
+            ["name"] = node.Name,
+            ["type"] = node.Type,
+            ["lineColor"] = node.LineColor,
+            ["fillColor"] = node.FillColor,
+            ["description"] = node.Description ?? string.Empty,
+            ["editUrl"] = Url.Page("/Nodes/Index", null, new { projectId = Model.ProjectId, editId = node.Id }, null),
+            ["duplicateUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Duplicate", projectId = Model.ProjectId }, null),
+            ["deleteUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Delete", projectId = Model.ProjectId }, null)
+        };
+    }
+
+    List<Dictionary<string, object?>> BuildTree(int? parentNodeId, HashSet<int> visitedNodeIds)
+    {
+        var items = new List<Dictionary<string, object?>>();
+        var children = nodesByParent[parentNodeId];
+        if (!children.Any())
+        {
+            return items;
+        }
+
+        foreach (var child in children)
+        {
+            if (!visitedNodeIds.Add(child.Id))
+            {
+                continue;
+            }
+
+            var row = ToTabulatorRow(child);
+            var nestedChildren = BuildTree(child.Id, visitedNodeIds);
+            if (nestedChildren.Count > 0)
+            {
+                row["_children"] = nestedChildren;
+            }
+
+            items.Add(row);
+        }
+
+        return items;
+    }
+
+    var visited = new HashSet<int>();
+    var treeRows = BuildTree(null, visited);
+    foreach (var orphan in Model.Nodes.Where(n => !visited.Contains(n.Id)).OrderBy(n => n.Name))
+    {
+        var orphanRow = ToTabulatorRow(orphan);
+        var nestedChildren = BuildTree(orphan.Id, visited);
+        if (nestedChildren.Count > 0)
+        {
+            orphanRow["_children"] = nestedChildren;
+        }
+
+        treeRows.Add(orphanRow);
+    }
+
+    var treeRowsJson = JsonSerializer.Serialize(treeRows);
 }
 
 <p class="text-muted mb-3">
@@ -72,60 +136,115 @@
 
     <div class="col-lg-7">
         <h2>Existing Nodes</h2>
-        @if (!Model.Nodes.Any())
-        {
-            <p class="text-muted">No nodes created yet.</p>
-        }
-        else
-        {
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Parent</th>
-                        <th>Colors</th>
-                        <th>Description</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach (var node in Model.Nodes)
-                {
-                    <tr>
-                        <td>@node.Name</td>
-                        <td>@node.Type</td>
-                        <td>@(node.ParentNodeId.HasValue && nodeLookup.TryGetValue(node.ParentNodeId.Value, out var parentNode) ? parentNode.Name : "-")</td>
-                        <td>
-                            <span title="Line" style="display:inline-block;width:14px;height:14px;border:2px solid @node.LineColor;background:#fff;border-radius:3px;"></span>
-                            <span title="Fill" style="display:inline-block;width:14px;height:14px;border:1px solid #adb5bd;background:@node.FillColor;border-radius:3px;margin-left:4px;"></span>
-                        </td>
-                        <td>@node.Description</td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@node.Id" title="Edit" aria-label="Edit">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-9.5 9.5L3 14l.646-2.646 9.5-9.5zM11.207 2 4 9.207V10h.793L12 2.793 11.207 2z"/></svg>
-                            </a>
-                            <form method="post" asp-page-handler="Duplicate" asp-route-projectId="@Model.ProjectId" class="d-inline">
-                                <input type="hidden" name="sourceId" value="@node.Id" />
-                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Duplicate" aria-label="Duplicate">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 1a2 2 0 0 0-2 2v8h1V3a1 1 0 0 1 1-1h8V1H4z"/><path d="M6 4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6zm0 1h6a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
-                                </button>
-                            </form>
-                            <form method="post" asp-page-handler="Delete" asp-route-projectId="@Model.ProjectId" class="d-inline" onsubmit="return confirm('Delete this node?');">
-                                <input type="hidden" name="deleteId" value="@node.Id" />
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" aria-label="Delete">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        }
+        <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_bootstrap5.min.css" />
+        <div id="existing-nodes-table"></div>
+        <form id="node-action-token-form" method="post" class="d-none">
+            @Html.AntiForgeryToken()
+        </form>
     </div>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <script>
+        (() => {
+            const treeData = @Html.Raw(treeRowsJson);
+            const tableElement = document.getElementById("existing-nodes-table");
+            const tokenValue = document.querySelector("#node-action-token-form input[name='__RequestVerificationToken']")?.value ?? "";
+
+            const escapeHtml = (value) => {
+                return String(value ?? "")
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll("\"", "&quot;")
+                    .replaceAll("'", "&#39;");
+            };
+
+            const colorFormatter = (cell) => {
+                const data = cell.getRow().getData();
+                const lineColor = escapeHtml(data.lineColor || "#495057");
+                const fillColor = escapeHtml(data.fillColor || "#ffffff");
+                return `
+                    <span title="Line" style="display:inline-block;width:14px;height:14px;border:2px solid ${lineColor};background:#fff;border-radius:3px;"></span>
+                    <span title="Fill" style="display:inline-block;width:14px;height:14px;border:1px solid #adb5bd;background:${fillColor};border-radius:3px;margin-left:4px;"></span>
+                `;
+            };
+
+            const actionsFormatter = (cell) => {
+                const data = cell.getRow().getData();
+                const editUrl = escapeHtml(data.editUrl);
+                const duplicateUrl = escapeHtml(data.duplicateUrl);
+                const deleteUrl = escapeHtml(data.deleteUrl);
+                const nodeId = escapeHtml(data.id);
+
+                return `
+                    <div class="d-flex justify-content-end gap-1">
+                        <a class="btn btn-sm btn-outline-primary" href="${editUrl}" title="Edit" aria-label="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-9.5 9.5L3 14l.646-2.646 9.5-9.5zM11.207 2 4 9.207V10h.793L12 2.793 11.207 2z"/></svg>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" title="Duplicate" aria-label="Duplicate" data-action="duplicate" data-url="${duplicateUrl}" data-id="${nodeId}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 1a2 2 0 0 0-2 2v8h1V3a1 1 0 0 1 1-1h8V1H4z"/><path d="M6 4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6zm0 1h6a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" aria-label="Delete" data-action="delete" data-url="${deleteUrl}" data-id="${nodeId}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
+                        </button>
+                    </div>
+                `;
+            };
+
+            new Tabulator(tableElement, {
+                data: treeData,
+                dataTree: true,
+                dataTreeStartExpanded: true,
+                layout: "fitColumns",
+                placeholder: "No nodes created yet.",
+                columns: [
+                    { title: "Name", field: "name", widthGrow: 2 },
+                    { title: "Type", field: "type", width: 140 },
+                    { title: "Colors", field: "lineColor", width: 120, hozAlign: "center", formatter: colorFormatter },
+                    { title: "Description", field: "description", widthGrow: 2 },
+                    { title: "Actions", field: "id", hozAlign: "right", width: 160, formatter: actionsFormatter }
+                ]
+            });
+
+            tableElement.addEventListener("click", (event) => {
+                const actionButton = event.target.closest("button[data-action]");
+                if (!actionButton) {
+                    return;
+                }
+
+                const action = actionButton.dataset.action;
+                const actionUrl = actionButton.dataset.url;
+                const nodeId = actionButton.dataset.id;
+                if (!actionUrl || !nodeId) {
+                    return;
+                }
+
+                if (action === "delete" && !confirm("Delete this node?")) {
+                    return;
+                }
+
+                const form = document.createElement("form");
+                form.method = "post";
+                form.action = actionUrl;
+
+                const tokenInput = document.createElement("input");
+                tokenInput.type = "hidden";
+                tokenInput.name = "__RequestVerificationToken";
+                tokenInput.value = tokenValue;
+                form.appendChild(tokenInput);
+
+                const idInput = document.createElement("input");
+                idInput.type = "hidden";
+                idInput.name = action === "duplicate" ? "sourceId" : "deleteId";
+                idInput.value = nodeId;
+                form.appendChild(idInput);
+
+                document.body.appendChild(form);
+                form.submit();
+            });
+        })();
+    </script>
 }

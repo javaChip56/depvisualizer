@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("dependencies_visualizer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8aa796a28a3842a94e97cf05dd19647fff75143c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+65a75e472ab15f9daf66148ef5c75e3fcbd34ce3")]
 [assembly: System.Reflection.AssemblyProductAttribute("dependencies_visualizer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("dependencies_visualizer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
