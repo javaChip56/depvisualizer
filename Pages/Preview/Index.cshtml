@@ -59,6 +59,30 @@
         }
 
         const shouldUsePreset = hasPresetPositions(elements);
+        const layoutConfig = shouldUsePreset
+            ? {
+                name: 'preset',
+                fit: true,
+                padding: 20
+            }
+            : {
+                // First-load layout tuning: avoid overlap while keeping clusters reasonably compact.
+                name: 'cose',
+                fit: true,
+                animate: false,
+                padding: 30,
+                nodeDimensionsIncludeLabels: true,
+                avoidOverlap: true,
+                avoidOverlapPadding: 18,
+                idealEdgeLength: 90,
+                edgeElasticity: 120,
+                nodeRepulsion: 450000,
+                componentSpacing: 60,
+                nestingFactor: 1.1,
+                gravity: 1,
+                numIter: 1200
+            };
+
         const cy = cytoscape({
             container: document.getElementById('cy'),
             elements,
@@ -71,6 +95,8 @@
                         'border-color': '#495057',
                         'shape': 'data(shape)',
                         'label': 'data(label)',
+                        'text-valign': 'center',
+                        'text-halign': 'center',
                         'font-size': '8px',
                         'text-wrap': 'wrap',
                         'text-max-width': '55px',
@@ -104,11 +130,7 @@
                     }
                 }
             ],
-            layout: {
-                name: shouldUsePreset ? 'preset' : 'cose',
-                fit: true,
-                padding: 20
-            }
+            layout: layoutConfig
         });
 
         cy.on('dragfree', 'node', () => queueSave(cy));

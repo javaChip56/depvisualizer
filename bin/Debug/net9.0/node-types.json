@@ -47,7 +47,7 @@
     },
     {
       "Name": "Table",
-      "Shape": "diamond",
+      "Shape": "rectangle",
       "Kind": 0
     }
   ]

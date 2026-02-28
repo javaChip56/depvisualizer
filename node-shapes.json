@@ -9,6 +9,6 @@
     "Server": "rectangle",
     "Service": "ellipse",
     "StoredProcedure": "tag",
-    "Table": "diamond"
+    "Table": "rectangle"
   }
 }
