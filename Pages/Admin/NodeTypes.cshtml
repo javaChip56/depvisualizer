@@ -19,7 +19,7 @@
             </div>
             <div class="mb-3">
                 <label asp-for="Input.Shape" class="form-label"></label>
-                <select asp-for="Input.Shape" class="form-select" asp-items="Model.ShapeOptions"></select>
+                <select asp-for="Input.Shape" class="form-select" asp-items="Model.ShapeOptions" data-shape-picker="true"></select>
                 <span asp-validation-for="Input.Shape" class="text-danger"></span>
             </div>
             <div class="mb-3">
