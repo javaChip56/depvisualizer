@@ -59,10 +59,14 @@
                     <td>@nodeType.Shape</td>
                     <td>@nodeType.Kind</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" asp-page="/Admin/NodeTypes" asp-route-editName="@nodeType.Name">Edit</a>
+                        <a class="btn btn-sm btn-outline-primary" asp-page="/Admin/NodeTypes" asp-route-editName="@nodeType.Name" title="Edit" aria-label="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-9.5 9.5L3 14l.646-2.646 9.5-9.5zM11.207 2 4 9.207V10h.793L12 2.793 11.207 2z"/></svg>
+                        </a>
                         <form method="post" asp-page-handler="Delete" class="d-inline" onsubmit="return confirm('Delete this node type?');">
                             <input type="hidden" name="DeleteInput.Name" value="@nodeType.Name" />
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" aria-label="Delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
+                            </button>
                         </form>
                     </td>
                 </tr>

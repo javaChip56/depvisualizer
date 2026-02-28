@@ -1,8 +1,18 @@
 {
   "NodeTypes": [
     {
+      "Name": "API",
+      "Shape": "cut-rectangle",
+      "Kind": 0
+    },
+    {
       "Name": "Database",
       "Shape": "barrel",
+      "Kind": 1
+    },
+    {
+      "Name": "ECS",
+      "Shape": "cut-rectangle",
       "Kind": 1
     },
     {

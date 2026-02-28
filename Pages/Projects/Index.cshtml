@@ -55,11 +55,21 @@
                         <td>@item.Role</td>
                         <td>@project.Description</td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-projectId="@project.Id">Nodes</a>
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@project.Id">Relationships</a>
-                            <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-projectId="@project.Id">Preview</a>
-                            <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@project.Id">Audit</a>
-                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@project.Id">Open</a>
+                            <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-projectId="@project.Id" title="Nodes" aria-label="Nodes">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/></svg>
+                            </a>
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@project.Id" title="Relationships" aria-label="Relationships">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 5h5V3l4 3-4 3V7H2V5zm12 6H9v2l-4-3 4-3v2h5v2z"/></svg>
+                            </a>
+                            <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-projectId="@project.Id" title="Preview" aria-label="Preview">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3C4.5 3 1.6 5.2.3 8c1.3 2.8 4.2 5 7.7 5s6.4-2.2 7.7-5C14.4 5.2 11.5 3 8 3zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                            </a>
+                            <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@project.Id" title="Audit" aria-label="Audit">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3a.5.5 0 0 1 .5.5V8l3 1.8-.5.8L7.5 8.5V3.5A.5.5 0 0 1 8 3z"/><path d="M8 1a7 7 0 1 0 7 7A7 7 0 0 0 8 1zm0 13A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/></svg>
+                            </a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@project.Id" title="Open" aria-label="Open">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.5 2a.5.5 0 0 1 0 1H4v9h9V5.5a.5.5 0 0 1 1 0V12A1 1 0 0 1 13 13H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h6.5z"/><path d="M15 1.5V5a.5.5 0 0 1-1 0V2.7l-5.1 5.1a.5.5 0 0 1-.8-.6l.1-.1L13.3 2H11a.5.5 0 0 1 0-1h3.5a.5.5 0 0 1 .5.5z"/></svg>
+                            </a>
                         </td>
                     </tr>
                 }

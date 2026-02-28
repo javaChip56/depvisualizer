@@ -1,6 +1,8 @@
 {
   "NodeShapes": {
+    "API": "cut-rectangle",
     "Database": "barrel",
+    "ECS": "cut-rectangle",
     "Module": "round-rectangle",
     "Other": "round-diamond",
     "Page": "rectangle",
