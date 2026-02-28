@@ -53,6 +53,15 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             ModelState.AddModelError(nameof(Input.Type), "Select a valid node type from configuration.");
         }
 
+        var normalizedName = Input.Name?.Trim() ?? string.Empty;
+        var duplicateNameExists = projectNodes.Any(n =>
+            string.Equals(n.Name, normalizedName, StringComparison.OrdinalIgnoreCase) &&
+            n.Id != Input.Id);
+        if (duplicateNameExists)
+        {
+            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.Name)}", "A node with this name already exists in the project.");
+        }
+
         if (!Regex.IsMatch(Input.LineColor ?? string.Empty, "^#[0-9a-fA-F]{6}$"))
         {
             ModelState.AddModelError(nameof(Input.LineColor), "Select a valid line color.");
@@ -98,8 +107,8 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         {
             var updated = _repository.UpdateNode(ProjectId!.Value, Input.Id, new Node
             {
-                Name = Input.Name,
-                Type = Input.Type.Trim(),
+                Name = normalizedName,
+                Type = (Input.Type ?? string.Empty).Trim(),
                 ParentNodeId = Input.ParentNodeId,
                 LineColor = Input.LineColor ?? "#495057",
                 FillColor = Input.FillColor ?? "#ffffff",
@@ -117,14 +126,44 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         {
             _repository.AddNode(ProjectId!.Value, new Node
             {
-                Name = Input.Name,
-                Type = Input.Type.Trim(),
+                Name = normalizedName,
+                Type = (Input.Type ?? string.Empty).Trim(),
                 ParentNodeId = Input.ParentNodeId,
                 LineColor = Input.LineColor ?? "#495057",
                 FillColor = Input.FillColor ?? "#ffffff",
                 Description = Input.Description
             });
         }
+
+        return RedirectToPage(new { projectId = ProjectId });
+    }
+
+    public IActionResult OnPostDuplicate(int sourceId)
+    {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
+        var sourceNode = _repository.GetNodeById(ProjectId!.Value, sourceId);
+        if (sourceNode is null)
+        {
+            ModelState.AddModelError(string.Empty, "Node not found for duplication.");
+            LoadData();
+            return Page();
+        }
+
+        var projectNodes = _repository.GetNodes(ProjectId.Value);
+        var duplicateName = BuildDuplicateName(sourceNode.Name, projectNodes);
+        _repository.AddNode(ProjectId.Value, new Node
+        {
+            Name = duplicateName,
+            Type = sourceNode.Type,
+            ParentNodeId = sourceNode.ParentNodeId,
+            LineColor = sourceNode.LineColor,
+            FillColor = sourceNode.FillColor,
+            Description = sourceNode.Description
+        });
 
         return RedirectToPage(new { projectId = ProjectId });
     }
@@ -234,6 +273,31 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
 
         return !CreatesParentCycle(nodeId, candidateParentId, nodes);
+    }
+
+    private static string BuildDuplicateName(string baseName, IReadOnlyList<Node> existingNodes)
+    {
+        var existingNames = existingNodes
+            .Select(n => n.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var candidate = $"{baseName} (Copy)";
+        if (!existingNames.Contains(candidate))
+        {
+            return candidate;
+        }
+
+        var suffix = 2;
+        while (true)
+        {
+            candidate = $"{baseName} (Copy {suffix})";
+            if (!existingNames.Contains(candidate))
+            {
+                return candidate;
+            }
+
+            suffix++;
+        }
     }
 
     public sealed class NodeInputModel

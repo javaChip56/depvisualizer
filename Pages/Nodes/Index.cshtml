@@ -102,6 +102,10 @@
                         <td>@node.Description</td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@node.Id">Edit</a>
+                            <form method="post" asp-page-handler="Duplicate" asp-route-projectId="@Model.ProjectId" class="d-inline">
+                                <input type="hidden" name="sourceId" value="@node.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
+                            </form>
                         </td>
                     </tr>
                 }
