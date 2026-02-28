@@ -29,6 +29,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         var relationships = _repository.GetRelationships(ProjectId!.Value);
         var nodeIds = nodes.Select(n => $"n{n.Id}").ToList();
         var savedPositions = _repository.GetLayoutPositions(ProjectId.Value, nodeIds);
+        var validParentLookup = BuildValidParentLookup(nodes);
 
         var elements = new List<object>();
 
@@ -40,8 +41,13 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
                 ["id"] = nodeId,
                 ["label"] = node.Name,
                 ["type"] = node.Type,
-                ["shape"] = _nodeShapeResolver.Resolve(node.Type)
+                ["shape"] = _nodeShapeResolver.Resolve(node.Type),
+                ["isCompoundType"] = _nodeShapeResolver.IsCompoundType(node.Type)
             };
+            if (validParentLookup.TryGetValue(node.Id, out var parentId))
+            {
+                data["parent"] = $"n{parentId}";
+            }
 
             if (savedPositions.TryGetValue(nodeId, out var savedPosition))
             {
@@ -135,5 +141,66 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         }
 
         return true;
+    }
+
+    private Dictionary<int, int> BuildValidParentLookup(IReadOnlyList<Node> nodes)
+    {
+        var byId = nodes.ToDictionary(n => n.Id);
+        var validParentByNodeId = new Dictionary<int, int>();
+
+        foreach (var node in nodes)
+        {
+            if (!node.ParentNodeId.HasValue)
+            {
+                continue;
+            }
+
+            var parentId = node.ParentNodeId.Value;
+            if (!byId.TryGetValue(parentId, out var parentNode))
+            {
+                continue;
+            }
+
+            if (!_nodeShapeResolver.IsCompoundType(parentNode.Type))
+            {
+                continue;
+            }
+
+            if (CreatesCycle(node.Id, parentId, byId))
+            {
+                continue;
+            }
+
+            validParentByNodeId[node.Id] = parentId;
+        }
+
+        return validParentByNodeId;
+    }
+
+    private static bool CreatesCycle(int nodeId, int parentId, IReadOnlyDictionary<int, Node> nodesById)
+    {
+        if (!nodesById.TryGetValue(parentId, out var current))
+        {
+            return false;
+        }
+
+        var visited = new HashSet<int>();
+        while (true)
+        {
+            if (!visited.Add(current.Id))
+            {
+                return true;
+            }
+
+            if (current.Id == nodeId)
+            {
+                return true;
+            }
+
+            if (!current.ParentNodeId.HasValue || !nodesById.TryGetValue(current.ParentNodeId.Value, out current))
+            {
+                return false;
+            }
+        }
     }
 }

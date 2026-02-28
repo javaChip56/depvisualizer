@@ -1,14 +1,54 @@
 {
   "NodeTypes": [
-    "Module",
-    "Page",
-    "Component",
-    "Database",
-    "StoredProcedure",
-    "Table",
-    "Server",
-    "Api",
-    "Service",
-    "Other"
+    {
+      "Name": "Api",
+      "Shape": "triangle",
+      "Kind": 0
+    },
+    {
+      "Name": "Component",
+      "Shape": "hexagon",
+      "Kind": 0
+    },
+    {
+      "Name": "Database",
+      "Shape": "barrel",
+      "Kind": 1
+    },
+    {
+      "Name": "Module",
+      "Shape": "round-rectangle",
+      "Kind": 0
+    },
+    {
+      "Name": "Other",
+      "Shape": "round-diamond",
+      "Kind": 0
+    },
+    {
+      "Name": "Page",
+      "Shape": "rectangle",
+      "Kind": 0
+    },
+    {
+      "Name": "Server",
+      "Shape": "rectangle",
+      "Kind": 1
+    },
+    {
+      "Name": "Service",
+      "Shape": "ellipse",
+      "Kind": 0
+    },
+    {
+      "Name": "StoredProcedure",
+      "Shape": "tag",
+      "Kind": 0
+    },
+    {
+      "Name": "Table",
+      "Shape": "diamond",
+      "Kind": 0
+    }
   ]
 }

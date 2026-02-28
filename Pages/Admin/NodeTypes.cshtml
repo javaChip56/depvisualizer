@@ -1,0 +1,78 @@
+@page
+@model dependencies_visualizer.Pages.Admin.NodeTypesModel
+@{
+    ViewData["Title"] = "Node Types";
+}
+
+<h1>Manage Node Types</h1>
+<p class="text-muted">Create or update a node type, assign a Cytoscape shape, and set it as regular or compound (grouping).</p>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2 class="h4">@(Model.IsEditMode ? "Edit Node Type" : "Add / Update Node Type")</h2>
+        <form method="post" asp-page-handler="Save" class="card p-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+            <div class="mb-3">
+                <label asp-for="Input.Name" class="form-label"></label>
+                <input asp-for="Input.Name" class="form-control" readonly="@Model.IsEditMode" />
+                <span asp-validation-for="Input.Name" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.Shape" class="form-label"></label>
+                <select asp-for="Input.Shape" class="form-select" asp-items="Model.ShapeOptions"></select>
+                <span asp-validation-for="Input.Shape" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.Kind" class="form-label"></label>
+                <select asp-for="Input.Kind" class="form-select">
+                    <option value="Regular">Regular</option>
+                    <option value="Compound">Compound</option>
+                </select>
+                <span asp-validation-for="Input.Kind" class="text-danger"></span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save Node Type</button>
+                @if (Model.IsEditMode)
+                {
+                    <a class="btn btn-outline-secondary" asp-page="/Admin/NodeTypes">Cancel</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-7">
+        <h2 class="h4">Current Node Types</h2>
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Shape</th>
+                    <th>Kind</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var nodeType in Model.NodeTypes)
+            {
+                <tr>
+                    <td>@nodeType.Name</td>
+                    <td>@nodeType.Shape</td>
+                    <td>@nodeType.Kind</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-page="/Admin/NodeTypes" asp-route-editName="@nodeType.Name">Edit</a>
+                        <form method="post" asp-page-handler="Delete" class="d-inline">
+                            <input type="hidden" name="DeleteInput.Name" value="@nodeType.Name" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="small text-muted">Deleting a node type is blocked while it is used by any node.</p>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

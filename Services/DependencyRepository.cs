@@ -216,6 +216,20 @@ public sealed class DependencyRepository
         }
     }
 
+    public bool IsNodeTypeInUse(string nodeType)
+    {
+        var normalized = nodeType?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            return _nodes.Any(n => string.Equals(n.Type, normalized, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
     public Node? GetNodeById(int projectId, int id)
     {
         lock (_syncRoot)
@@ -250,6 +264,7 @@ public sealed class DependencyRepository
             {
                 Id = _nextNodeId++,
                 ProjectId = projectId,
+                ParentNodeId = node.ParentNodeId,
                 Name = node.Name.Trim(),
                 Type = node.Type.Trim(),
                 Description = string.IsNullOrWhiteSpace(node.Description) ? null : node.Description.Trim()
@@ -274,6 +289,7 @@ public sealed class DependencyRepository
 
             existing.Name = node.Name.Trim();
             existing.Type = node.Type.Trim();
+            existing.ParentNodeId = node.ParentNodeId;
             existing.Description = string.IsNullOrWhiteSpace(node.Description) ? null : node.Description.Trim();
             return true;
         }

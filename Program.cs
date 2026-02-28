@@ -24,6 +24,7 @@ builder.Services.AddRazorPages(options =>
 builder.Services.AddSingleton<DependencyRepository>();
 builder.Services.AddSingleton<NodeShapeResolver>();
 builder.Services.AddSingleton<NodeTypeCatalog>();
+builder.Services.AddSingleton<NodeTypeAdminService>();
 builder.Services.AddSingleton<UserAccountService>();
 
 var app = builder.Build();
