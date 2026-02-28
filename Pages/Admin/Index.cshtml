@@ -1,0 +1,57 @@
+@page
+@model dependencies_visualizer.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Admin";
+}
+
+<h1>User Administration</h1>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2 class="h4">Create User</h2>
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="mb-3">
+                <label asp-for="Input.Username" class="form-label"></label>
+                <input asp-for="Input.Username" class="form-control" />
+                <span asp-validation-for="Input.Username" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.DefaultPassword" class="form-label"></label>
+                <input asp-for="Input.DefaultPassword" class="form-control" />
+                <span asp-validation-for="Input.DefaultPassword" class="text-danger"></span>
+            </div>
+            <div class="form-check mb-3">
+                <input asp-for="Input.IsAdmin" class="form-check-input" />
+                <label asp-for="Input.IsAdmin" class="form-check-label"></label>
+            </div>
+            <button type="submit" class="btn btn-primary">Create user</button>
+        </form>
+    </div>
+    <div class="col-lg-7">
+        <h2 class="h4">Current Users</h2>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Must Change Password</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var user in Model.Users)
+            {
+                <tr>
+                    <td>@user.Username</td>
+                    <td>@(user.IsAdmin ? "Admin" : "User")</td>
+                    <td>@(user.MustChangePassword ? "Yes" : "No")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

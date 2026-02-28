@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\dependencies_visualizer.props" />
+</Project>

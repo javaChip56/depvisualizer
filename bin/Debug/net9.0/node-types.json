@@ -1,0 +1,14 @@
+{
+  "NodeTypes": [
+    "Module",
+    "Page",
+    "Component",
+    "Database",
+    "StoredProcedure",
+    "Table",
+    "Server",
+    "Api",
+    "Service",
+    "Other"
+  ]
+}

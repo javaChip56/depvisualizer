@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "dependencies_visualizer/1.0.0": {
+        "runtime": {
+          "dependencies_visualizer.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "dependencies_visualizer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
