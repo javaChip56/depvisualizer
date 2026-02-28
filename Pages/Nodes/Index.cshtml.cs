@@ -121,6 +121,13 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 LoadData(preservePostedInput: true);
                 return Page();
             }
+
+            _repository.AddAuditEntry(
+                ProjectId.Value,
+                User.Identity!.Name!,
+                "Update",
+                "Node",
+                $"Updated node '{normalizedName}'.");
         }
         else
         {
@@ -133,7 +140,47 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 FillColor = Input.FillColor ?? "#ffffff",
                 Description = Input.Description
             });
+
+            _repository.AddAuditEntry(
+                ProjectId.Value,
+                User.Identity!.Name!,
+                "Create",
+                "Node",
+                $"Created node '{normalizedName}'.");
         }
+
+        return RedirectToPage(new { projectId = ProjectId });
+    }
+
+    public IActionResult OnPostDelete(int deleteId)
+    {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
+        var existing = _repository.GetNodeById(ProjectId!.Value, deleteId);
+        if (existing is null)
+        {
+            ModelState.AddModelError(string.Empty, "Node not found.");
+            LoadData();
+            return Page();
+        }
+
+        var deleted = _repository.DeleteNode(ProjectId.Value, deleteId, out var error);
+        if (!deleted)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Unable to delete node.");
+            LoadData();
+            return Page();
+        }
+
+        _repository.AddAuditEntry(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            "Delete",
+            "Node",
+            $"Deleted node '{existing.Name}'.");
 
         return RedirectToPage(new { projectId = ProjectId });
     }
@@ -164,6 +211,13 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             FillColor = sourceNode.FillColor,
             Description = sourceNode.Description
         });
+
+        _repository.AddAuditEntry(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            "Duplicate",
+            "Node",
+            $"Duplicated node '{sourceNode.Name}' as '{duplicateName}'.");
 
         return RedirectToPage(new { projectId = ProjectId });
     }

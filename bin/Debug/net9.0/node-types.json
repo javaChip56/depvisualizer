@@ -1,16 +1,6 @@
 {
   "NodeTypes": [
     {
-      "Name": "Api",
-      "Shape": "triangle",
-      "Kind": 0
-    },
-    {
-      "Name": "Component",
-      "Shape": "hexagon",
-      "Kind": 0
-    },
-    {
       "Name": "Database",
       "Shape": "barrel",
       "Kind": 1

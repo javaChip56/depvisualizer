@@ -66,6 +66,53 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             return Page();
         }
 
+        var selectedNode = Nodes.FirstOrDefault(n => n.Id == Input.SelectedNodeId);
+        var relatedNode = Nodes.FirstOrDefault(n => n.Id == Input.RelatedNodeId);
+        var selectedName = selectedNode?.Name ?? Input.SelectedNodeId.ToString();
+        var relatedName = relatedNode?.Name ?? Input.RelatedNodeId.ToString();
+        _repository.AddAuditEntry(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            Input.Id > 0 ? "Update" : "Create",
+            "Relationship",
+            $"{selectedName} {(selectedDependsOnRelated ? "depends on" : "is dependency of")} {relatedName}.");
+
+        return RedirectToPage(new { projectId = ProjectId });
+    }
+
+    public IActionResult OnPostDelete(int deleteId)
+    {
+        if (!TryLoadProjectAndAuthorize(out var redirect))
+        {
+            return redirect!;
+        }
+
+        var existing = _repository.GetRelationshipById(ProjectId!.Value, deleteId);
+        if (existing is null)
+        {
+            ModelState.AddModelError(string.Empty, "Relationship not found.");
+            LoadData();
+            return Page();
+        }
+
+        var deleted = _repository.DeleteRelationship(ProjectId.Value, deleteId, out var error);
+        if (!deleted)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Unable to delete relationship.");
+            LoadData();
+            return Page();
+        }
+
+        var nodes = _repository.GetNodes(ProjectId.Value);
+        var source = nodes.FirstOrDefault(n => n.Id == existing.SourceNodeId)?.Name ?? existing.SourceNodeId.ToString();
+        var target = nodes.FirstOrDefault(n => n.Id == existing.TargetNodeId)?.Name ?? existing.TargetNodeId.ToString();
+        _repository.AddAuditEntry(
+            ProjectId.Value,
+            User.Identity!.Name!,
+            "Delete",
+            "Relationship",
+            $"Deleted relationship {source} depends on {target}.");
+
         return RedirectToPage(new { projectId = ProjectId });
     }
 

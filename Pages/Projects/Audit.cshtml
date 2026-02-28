@@ -1,0 +1,42 @@
+@page
+@model dependencies_visualizer.Pages.Projects.AuditModel
+@{
+    ViewData["Title"] = "Project Audit";
+}
+
+<h1>Project Audit</h1>
+<p class="text-muted">
+    Project: <strong>@Model.CurrentProject?.Name</strong>
+    <a class="ms-2" asp-page="/Projects/Index">Back to projects</a>
+</p>
+
+@if (!Model.Entries.Any())
+{
+    <p class="text-muted">No audit events recorded yet.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Time (UTC)</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var entry in Model.Entries)
+        {
+            <tr>
+                <td>@entry.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                <td>@entry.Username</td>
+                <td>@entry.Action</td>
+                <td>@entry.EntityType</td>
+                <td>@entry.Details</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

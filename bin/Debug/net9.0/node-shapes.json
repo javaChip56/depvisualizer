@@ -1,7 +1,5 @@
 {
   "NodeShapes": {
-    "Api": "triangle",
-    "Component": "hexagon",
     "Database": "barrel",
     "Module": "round-rectangle",
     "Other": "round-diamond",

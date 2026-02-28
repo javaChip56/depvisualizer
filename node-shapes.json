@@ -1,14 +1,12 @@
 {
   "NodeShapes": {
-    "Api": "triangle",
-    "Component": "hexagon",
     "Database": "barrel",
     "Module": "round-rectangle",
     "Other": "round-diamond",
     "Page": "rectangle",
     "Server": "rectangle",
     "Service": "ellipse",
-    "StoredProcedure": "tag",
+    "StoredProcedure": "round-rectangle",
     "Table": "rectangle"
   }
 }

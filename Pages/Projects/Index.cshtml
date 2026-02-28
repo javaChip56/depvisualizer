@@ -58,6 +58,7 @@
                             <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-projectId="@project.Id">Nodes</a>
                             <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@project.Id">Relationships</a>
                             <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-projectId="@project.Id">Preview</a>
+                            <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@project.Id">Audit</a>
                             <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@project.Id">Open</a>
                         </td>
                     </tr>
@@ -122,7 +123,7 @@
                 </form>
 
                 <h3 class="h5 text-danger">Delete Project</h3>
-                <form method="post" asp-page-handler="DeleteProject" class="card p-3 border-danger-subtle">
+                <form method="post" asp-page-handler="DeleteProject" class="card p-3 border-danger-subtle" onsubmit="return confirm('Delete this project and all related data?');">
                     <input type="hidden" asp-for="DeleteInput.ProjectId" />
                     <p class="small text-muted mb-2">This deletes all nodes, relationships, and saved layout positions in this project.</p>
                     <button type="submit" class="btn btn-outline-danger">Delete Project</button>

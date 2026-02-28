@@ -8,6 +8,7 @@
 <p class="text-muted mb-3">
     Project: <strong>@Model.CurrentProject?.Name</strong>
     <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
+    <a class="ms-2" asp-page="/Projects/Audit" asp-route-projectId="@Model.ProjectId">View audit</a>
 </p>
 
 <div class="row g-4">
@@ -82,6 +83,10 @@
                         <td>@target.Name (@target.Type)</td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@relationship.Id">Edit</a>
+                            <form method="post" asp-page-handler="Delete" asp-route-projectId="@Model.ProjectId" class="d-inline" onsubmit="return confirm('Delete this relationship?');">
+                                <input type="hidden" name="deleteId" value="@relationship.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
                         </td>
                     </tr>
                 }

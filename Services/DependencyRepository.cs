@@ -9,6 +9,7 @@ public sealed class DependencyRepository
     private readonly Dictionary<int, Dictionary<string, ProjectMemberRole>> _projectMembersByProjectId = [];
     private readonly List<Node> _nodes = [];
     private readonly List<DependencyRelationship> _relationships = [];
+    private readonly Dictionary<int, List<ProjectAuditEntry>> _auditEntriesByProjectId = [];
     private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _maintainerLayoutByProjectId = [];
     private readonly Dictionary<int, Dictionary<string, Dictionary<string, NodeLayoutPosition>>> _contributorLayoutByProjectId = [];
     private int _nextProjectId = 1;
@@ -73,6 +74,54 @@ public sealed class DependencyRepository
                 .OrderBy(m => m.Key)
                 .Select(m => new ProjectMemberSummary(m.Key, m.Value))
                 .ToList();
+        }
+    }
+
+    public IReadOnlyList<ProjectAuditEntry> GetAuditEntries(int projectId, string username, bool isAdmin)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            if (GetRoleUnsafe(projectId, normalizedUsername, isAdmin) == ProjectMemberRole.None)
+            {
+                return [];
+            }
+
+            if (!_auditEntriesByProjectId.TryGetValue(projectId, out var entries))
+            {
+                return [];
+            }
+
+            return entries
+                .OrderByDescending(e => e.TimestampUtc)
+                .ToList();
+        }
+    }
+
+    public void AddAuditEntry(int projectId, string username, string action, string entityType, string details)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            if (!_projects.Any(p => p.Id == projectId))
+            {
+                return;
+            }
+
+            if (!_auditEntriesByProjectId.TryGetValue(projectId, out var entries))
+            {
+                entries = [];
+                _auditEntriesByProjectId[projectId] = entries;
+            }
+
+            entries.Add(new ProjectAuditEntry
+            {
+                TimestampUtc = DateTime.UtcNow,
+                Username = normalizedUsername,
+                Action = action,
+                EntityType = entityType,
+                Details = details
+            });
         }
     }
 
@@ -147,6 +196,7 @@ public sealed class DependencyRepository
             _projectMembersByProjectId.Remove(projectId);
             _nodes.RemoveAll(n => n.ProjectId == projectId);
             _relationships.RemoveAll(r => r.ProjectId == projectId);
+            _auditEntriesByProjectId.Remove(projectId);
             _maintainerLayoutByProjectId.Remove(projectId);
             _contributorLayoutByProjectId.Remove(projectId);
             return true;
@@ -301,6 +351,39 @@ public sealed class DependencyRepository
         }
     }
 
+    public bool DeleteNode(int projectId, int id, out string? error)
+    {
+        lock (_syncRoot)
+        {
+            error = null;
+            var existing = _nodes.FirstOrDefault(n => n.ProjectId == projectId && n.Id == id);
+            if (existing is null)
+            {
+                error = "Node not found.";
+                return false;
+            }
+
+            var hasRelationships = _relationships.Any(r =>
+                r.ProjectId == projectId &&
+                (r.SourceNodeId == id || r.TargetNodeId == id));
+            if (hasRelationships)
+            {
+                error = "Delete relationships connected to this node before deleting it.";
+                return false;
+            }
+
+            var hasChildren = _nodes.Any(n => n.ProjectId == projectId && n.ParentNodeId == id);
+            if (hasChildren)
+            {
+                error = "Delete or reassign child nodes before deleting this compound node.";
+                return false;
+            }
+
+            _nodes.Remove(existing);
+            return true;
+        }
+    }
+
     public bool AddRelationship(int projectId, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
     {
         lock (_syncRoot)
@@ -363,6 +446,22 @@ public sealed class DependencyRepository
                 SourceNodeId = sourceId,
                 TargetNodeId = targetId
             };
+            return true;
+        }
+    }
+
+    public bool DeleteRelationship(int projectId, int id, out string? error)
+    {
+        lock (_syncRoot)
+        {
+            error = null;
+            var removed = _relationships.RemoveAll(r => r.ProjectId == projectId && r.Id == id) > 0;
+            if (!removed)
+            {
+                error = "Relationship not found.";
+                return false;
+            }
+
             return true;
         }
     }

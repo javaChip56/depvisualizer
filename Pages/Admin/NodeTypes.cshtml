@@ -60,7 +60,7 @@
                     <td>@nodeType.Kind</td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" asp-page="/Admin/NodeTypes" asp-route-editName="@nodeType.Name">Edit</a>
-                        <form method="post" asp-page-handler="Delete" class="d-inline">
+                        <form method="post" asp-page-handler="Delete" class="d-inline" onsubmit="return confirm('Delete this node type?');">
                             <input type="hidden" name="DeleteInput.Name" value="@nodeType.Name" />
                             <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                         </form>

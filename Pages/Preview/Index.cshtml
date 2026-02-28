@@ -103,6 +103,7 @@
         }
 
         const shouldUsePreset = hasPresetPositions(elements);
+        const hasCompoundHierarchy = elements.some(e => e.data && e.data.parent);
         const layoutConfig = shouldUsePreset
             ? {
                 name: 'preset',
@@ -114,16 +115,16 @@
                 name: 'cose',
                 fit: true,
                 animate: false,
-                padding: 30,
+                padding: hasCompoundHierarchy ? 20 : 30,
                 nodeDimensionsIncludeLabels: true,
                 avoidOverlap: true,
-                avoidOverlapPadding: 18,
-                idealEdgeLength: 90,
+                avoidOverlapPadding: hasCompoundHierarchy ? 10 : 18,
+                idealEdgeLength: hasCompoundHierarchy ? 60 : 90,
                 edgeElasticity: 120,
-                nodeRepulsion: 450000,
-                componentSpacing: 60,
-                nestingFactor: 1.1,
-                gravity: 1,
+                nodeRepulsion: hasCompoundHierarchy ? 130000 : 450000,
+                componentSpacing: hasCompoundHierarchy ? 25 : 60,
+                nestingFactor: hasCompoundHierarchy ? 0.7 : 1.1,
+                gravity: hasCompoundHierarchy ? 1.8 : 1,
                 numIter: 1200
             };
 
@@ -147,9 +148,17 @@
                         'text-valign': 'center',
                         'text-halign': 'center',
                         'font-size': '8px',
-                        'text-wrap': 'wrap',
-                        'text-max-width': '55px',
+                        'text-wrap': 'none',
                         'color': '#000000'
+                    }
+                },
+                {
+                    selector: 'node[isCompoundType = false]',
+                    style: {
+                        'width': 'label',
+                        'height': 26,
+                        'padding-left': 10,
+                        'padding-right': 10
                     }
                 },
                 {
