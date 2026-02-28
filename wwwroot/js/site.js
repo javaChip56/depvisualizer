@@ -65,11 +65,15 @@
     }
 
     function createTomSelectOptions(select) {
+        var emptyOption = select.querySelector('option[value=""]');
+        var placeholder = emptyOption ? emptyOption.text.trim() : "";
+
         var options = {
             create: false,
             maxOptions: 2000,
-            allowEmptyOption: true,
-            hidePlaceholder: false,
+            allowEmptyOption: false,
+            hidePlaceholder: true,
+            placeholder: placeholder,
             closeAfterSelect: true,
             openOnFocus: true
         };
@@ -135,12 +139,11 @@
             }
 
             function exitFocusEditMode() {
-                if (!ts.wrapper.classList.contains("ts-focus-edit")) {
-                    return;
-                }
-
                 ts.wrapper.classList.remove("ts-focus-edit");
                 ts.setTextboxValue("");
+                if (typeof ts.refreshState === "function") {
+                    ts.refreshState();
+                }
             }
 
             ts.on("focus", function () {
