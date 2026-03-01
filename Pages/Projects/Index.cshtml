@@ -65,8 +65,27 @@
                     var subProjects = Model.SubProjectsByProjectId.TryGetValue(item.Project.Id, out var children)
                         ? children
                         : Array.Empty<dependencies_visualizer.Services.SubProjectAccessSummary>();
+                    var hasSubProjects = subProjects.Count > 0;
                     <tr>
-                        <td><strong>@item.Project.Name</strong></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                @if (hasSubProjects)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary py-0 project-toggle"
+                                            data-project-id="@item.Project.Id"
+                                            aria-expanded="true"
+                                            title="Collapse/Expand Sub Projects">
+                                        <span class="project-toggle-icon">▾</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span style="display:inline-block;width:1.75rem;"></span>
+                                }
+                                <strong>@item.Project.Name</strong>
+                            </div>
+                        </td>
                         <td>@item.Role</td>
                         <td>@item.Project.Description</td>
                         <td class="text-end">
@@ -78,7 +97,7 @@
 
                     @if (subProjects.Count == 0)
                     {
-                        <tr>
+                        <tr class="subproject-row subproject-parent-@item.Project.Id">
                             <td class="ps-4 text-muted">No sub projects</td>
                             <td class="text-muted">-</td>
                             <td class="text-muted">-</td>
@@ -90,9 +109,9 @@
                         @foreach (var subProjectItem in subProjects)
                         {
                             var subProject = subProjectItem.SubProject;
-                            <tr>
+                            <tr class="subproject-row subproject-parent-@item.Project.Id">
                                 <td class="ps-4">
-                                    <span class="text-muted me-1" aria-hidden="true">+</span>@subProject.Name
+                                    <span class="text-muted me-1" aria-hidden="true">└</span>@subProject.Name
                                 </td>
                                 <td>@subProjectItem.Role</td>
                                 <td>@subProject.Description</td>
@@ -404,6 +423,30 @@
 
             typeSelect?.addEventListener("change", updateParentVisibility);
             updateParentVisibility();
+
+            const projectToggles = document.querySelectorAll(".project-toggle");
+            projectToggles.forEach((toggle) => {
+                toggle.addEventListener("click", () => {
+                    const projectId = toggle.getAttribute("data-project-id");
+                    if (!projectId) {
+                        return;
+                    }
+
+                    const childRows = document.querySelectorAll(`.subproject-parent-${projectId}`);
+                    const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+                    const nextExpanded = !isExpanded;
+
+                    childRows.forEach((row) => {
+                        row.classList.toggle("d-none", !nextExpanded);
+                    });
+
+                    toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+                    const icon = toggle.querySelector(".project-toggle-icon");
+                    if (icon) {
+                        icon.textContent = nextExpanded ? "▾" : "▸";
+                    }
+                });
+            });
         })();
     </script>
 }

@@ -4,7 +4,6 @@ D:\Research\depvisualizer\bin\Debug\net9.0\node-shapes.json
 D:\Research\depvisualizer\bin\Debug\net9.0\node-types.json
 D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.staticwebassets.runtime.json
 D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.staticwebassets.endpoints.json
-D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.exe
 D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.deps.json
 D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.runtimeconfig.json
 D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.dll
@@ -98,3 +97,4 @@ D:\Research\depvisualizer\obj\Debug\net9.0\dependencies_visualizer.genruntimecon
 D:\Research\depvisualizer\obj\Debug\net9.0\ref\dependencies_visualizer.dll
 D:\Research\depvisualizer\obj\Debug\net9.0\compressed\kjjfxe7l9v-tejwr68m9e.gz
 D:\Research\depvisualizer\obj\Debug\net9.0\compressed\qe33sr1zyd-qmnyvb44qt.gz
+D:\Research\depvisualizer\bin\Debug\net9.0\dependencies_visualizer.exe
