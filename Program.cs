@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile("node-shapes.json", optional: false, reloadOnChange: true);
-builder.Configuration.AddJsonFile("node-types.json", optional: false, reloadOnChange: true);
+builder.Configuration.AddJsonFile("node-shapes.json", optional: false, reloadOnChange: false);
+builder.Configuration.AddJsonFile("node-types.json", optional: false, reloadOnChange: false);
 
 builder.Services.Configure<AuthDefaultsOptions>(builder.Configuration.GetSection(AuthDefaultsOptions.SectionName));
 builder.Services

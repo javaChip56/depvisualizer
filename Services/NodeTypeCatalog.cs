@@ -18,40 +18,18 @@ public sealed class NodeTypeCatalog(IConfiguration configuration)
         new() { Name = "Other", Shape = "round-diamond", Kind = NodeTypeKind.Regular }
     ];
 
-    private readonly IConfiguration _configuration = configuration;
+    private readonly object _syncRoot = new();
+    private readonly List<NodeTypeDefinition> _definitions = LoadSeedDefinitions(configuration);
 
     public IReadOnlyList<NodeTypeDefinition> GetDefinitions()
     {
-        var configuredDefinitions = _configuration.GetSection("NodeTypes").Get<List<NodeTypeDefinition>>() ?? [];
-        if (configuredDefinitions.Count > 0)
+        lock (_syncRoot)
         {
-            return NormalizeDefinitions(configuredDefinitions);
-        }
-
-        var legacyNodeTypeNames = _configuration.GetSection("NodeTypes").Get<string[]>() ?? [];
-        if (legacyNodeTypeNames.Length > 0)
-        {
-            var definitions = legacyNodeTypeNames
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .Select(v =>
-                {
-                    var name = v.Trim();
-                    var shape = _configuration[$"NodeShapes:{name}"];
-                    return new NodeTypeDefinition
-                    {
-                        Name = name,
-                        Shape = CytoscapeShapeCatalog.IsValid(shape) ? shape!.Trim() : "ellipse",
-                        Kind = NodeTypeKind.Regular
-                    };
-                })
+            return _definitions
+                .Select(Clone)
+                .OrderBy(d => d.Name)
                 .ToList();
-
-            return NormalizeDefinitions(definitions);
         }
-
-        return DefaultNodeTypes
-            .Select(Clone)
-            .ToList();
     }
 
     public IReadOnlyList<string> GetNodeTypes()
@@ -93,6 +71,75 @@ public sealed class NodeTypeCatalog(IConfiguration configuration)
         }
 
         return GetNodeTypes().Contains(nodeType.Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    public void Upsert(NodeTypeDefinition definition)
+    {
+        var normalizedName = definition.Name.Trim();
+        var normalizedShape = definition.Shape.Trim();
+        lock (_syncRoot)
+        {
+            var existing = _definitions.FirstOrDefault(d =>
+                string.Equals(d.Name, normalizedName, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                _definitions.Add(new NodeTypeDefinition
+                {
+                    Name = normalizedName,
+                    Shape = normalizedShape,
+                    Kind = definition.Kind
+                });
+                return;
+            }
+
+            existing.Name = normalizedName;
+            existing.Shape = normalizedShape;
+            existing.Kind = definition.Kind;
+        }
+    }
+
+    public bool Delete(string nodeTypeName)
+    {
+        var normalizedName = nodeTypeName.Trim();
+        lock (_syncRoot)
+        {
+            return _definitions.RemoveAll(d =>
+                string.Equals(d.Name, normalizedName, StringComparison.OrdinalIgnoreCase)) > 0;
+        }
+    }
+
+    private static List<NodeTypeDefinition> LoadSeedDefinitions(IConfiguration configuration)
+    {
+        var configuredDefinitions = configuration.GetSection("NodeTypes").Get<List<NodeTypeDefinition>>() ?? [];
+        if (configuredDefinitions.Count > 0)
+        {
+            return NormalizeDefinitions(configuredDefinitions).ToList();
+        }
+
+        var legacyNodeTypeNames = configuration.GetSection("NodeTypes").Get<string[]>() ?? [];
+        if (legacyNodeTypeNames.Length > 0)
+        {
+            var definitions = legacyNodeTypeNames
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v =>
+                {
+                    var name = v.Trim();
+                    var shape = configuration[$"NodeShapes:{name}"];
+                    return new NodeTypeDefinition
+                    {
+                        Name = name,
+                        Shape = CytoscapeShapeCatalog.IsValid(shape) ? shape!.Trim() : "ellipse",
+                        Kind = NodeTypeKind.Regular
+                    };
+                })
+                .ToList();
+
+            return NormalizeDefinitions(definitions).ToList();
+        }
+
+        return DefaultNodeTypes
+            .Select(Clone)
+            .ToList();
     }
 
     private static IReadOnlyList<NodeTypeDefinition> NormalizeDefinitions(IEnumerable<NodeTypeDefinition> definitions)
