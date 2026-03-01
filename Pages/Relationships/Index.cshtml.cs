@@ -15,12 +15,13 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
     public RelationshipInputModel Input { get; set; } = new();
 
     [BindProperty(SupportsGet = true)]
-    public int? ProjectId { get; set; }
+    public int? SubProjectId { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public int? EditId { get; set; }
 
     public Project? CurrentProject { get; private set; }
+    public SubProject? CurrentSubProject { get; private set; }
     public IReadOnlyList<Node> Nodes { get; private set; } = [];
     public IReadOnlyList<DependencyRelationship> Relationships { get; private set; } = [];
     public bool IsEditing => EditId.HasValue;
@@ -30,7 +31,7 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
 
     public IActionResult OnGet()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
@@ -41,7 +42,7 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
 
     public IActionResult OnPost()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
@@ -56,8 +57,8 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
         var selectedDependsOnRelated = Input.RelationshipType == RelationshipType.DependsOn;
         string? error;
         var ok = Input.Id > 0
-            ? _repository.UpdateRelationship(ProjectId!.Value, Input.Id, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error)
-            : _repository.AddRelationship(ProjectId!.Value, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error);
+            ? _repository.UpdateRelationship(SubProjectId!.Value, Input.Id, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error)
+            : _repository.AddRelationship(SubProjectId!.Value, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error);
         if (!ok)
         {
             ModelState.AddModelError(string.Empty, error ?? "Unable to save relationship.");
@@ -71,23 +72,23 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
         var selectedName = selectedNode?.Name ?? Input.SelectedNodeId.ToString();
         var relatedName = relatedNode?.Name ?? Input.RelatedNodeId.ToString();
         _repository.AddAuditEntry(
-            ProjectId.Value,
+            CurrentProject!.Id,
             User.Identity!.Name!,
             Input.Id > 0 ? "Update" : "Create",
             "Relationship",
-            $"{selectedName} {(selectedDependsOnRelated ? "depends on" : "is dependency of")} {relatedName}.");
+            $"{selectedName} {(selectedDependsOnRelated ? "depends on" : "is dependency of")} {relatedName} in sub project '{CurrentSubProject!.Name}'.");
 
-        return RedirectToPage(new { projectId = ProjectId });
+        return RedirectToPage(new { subProjectId = SubProjectId });
     }
 
     public IActionResult OnPostDelete(int deleteId)
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
-        var existing = _repository.GetRelationshipById(ProjectId!.Value, deleteId);
+        var existing = _repository.GetRelationshipById(SubProjectId!.Value, deleteId);
         if (existing is null)
         {
             ModelState.AddModelError(string.Empty, "Relationship not found.");
@@ -95,7 +96,7 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             return Page();
         }
 
-        var deleted = _repository.DeleteRelationship(ProjectId.Value, deleteId, out var error);
+        var deleted = _repository.DeleteRelationship(SubProjectId.Value, deleteId, out var error);
         if (!deleted)
         {
             ModelState.AddModelError(string.Empty, error ?? "Unable to delete relationship.");
@@ -103,27 +104,27 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             return Page();
         }
 
-        var nodes = _repository.GetNodes(ProjectId.Value);
+        var nodes = _repository.GetNodes(SubProjectId.Value);
         var source = nodes.FirstOrDefault(n => n.Id == existing.SourceNodeId)?.Name ?? existing.SourceNodeId.ToString();
         var target = nodes.FirstOrDefault(n => n.Id == existing.TargetNodeId)?.Name ?? existing.TargetNodeId.ToString();
         _repository.AddAuditEntry(
-            ProjectId.Value,
+            CurrentProject!.Id,
             User.Identity!.Name!,
             "Delete",
             "Relationship",
-            $"Deleted relationship {source} depends on {target}.");
+            $"Deleted relationship {source} depends on {target} from sub project '{CurrentSubProject!.Name}'.");
 
-        return RedirectToPage(new { projectId = ProjectId });
+        return RedirectToPage(new { subProjectId = SubProjectId });
     }
 
     private void LoadData(bool preservePostedInput = false)
     {
-        Nodes = _repository.GetNodes(ProjectId!.Value);
-        Relationships = _repository.GetRelationships(ProjectId!.Value);
+        Nodes = _repository.GetNodes(SubProjectId!.Value);
+        Relationships = _repository.GetRelationships(SubProjectId!.Value);
 
         if (EditId.HasValue && !preservePostedInput)
         {
-            var relationship = _repository.GetRelationshipById(ProjectId!.Value, EditId.Value);
+            var relationship = _repository.GetRelationshipById(SubProjectId!.Value, EditId.Value);
             if (relationship is null)
             {
                 EditId = null;
@@ -140,11 +141,11 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
         }
     }
 
-    private bool TryLoadProjectAndAuthorize(out IActionResult? redirect)
+    private bool TryLoadSubProjectAndAuthorize(out IActionResult? redirect)
     {
         redirect = null;
 
-        if (!ProjectId.HasValue)
+        if (!SubProjectId.HasValue)
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
@@ -158,13 +159,20 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
         }
 
         var isAdmin = User.IsInRole("Admin");
-        if (!_repository.UserCanAccessProject(ProjectId.Value, username, isAdmin))
+        if (!_repository.UserCanAccessSubProject(SubProjectId.Value, username, isAdmin))
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
         }
 
-        CurrentProject = _repository.GetProjectById(ProjectId.Value);
+        CurrentSubProject = _repository.GetSubProjectById(SubProjectId.Value);
+        if (CurrentSubProject is null)
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        CurrentProject = _repository.GetProjectById(CurrentSubProject.ProjectId);
         if (CurrentProject is null)
         {
             redirect = RedirectToPage("/Projects/Index");

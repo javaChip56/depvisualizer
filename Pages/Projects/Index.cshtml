@@ -6,28 +6,40 @@
 }
 
 <h1>Projects</h1>
-<p class="text-muted">Maintainers can manage project details and members. Contributors can manage nodes and relationships.</p>
+<p class="text-muted">Projects are parent containers. Nodes, relationships, and preview layouts are scoped to sub projects.</p>
 
 <div class="row g-4">
     <div class="col-lg-5">
-        <h2 class="h4">Create Project</h2>
-        <form method="post" asp-page-handler="CreateProject" class="card p-3">
+        <h2 class="h4">Add Project / Sub Project</h2>
+        <form method="post" asp-page-handler="CreateEntity" class="card p-3">
             <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
             <div class="mb-3">
-                <label asp-for="CreateInput.Name" class="form-label"></label>
-                <input asp-for="CreateInput.Name" class="form-control" />
-                <span asp-validation-for="CreateInput.Name" class="text-danger"></span>
+                <label asp-for="CreateEntityInput.EntityType" class="form-label"></label>
+                <select asp-for="CreateEntityInput.EntityType" class="form-select" id="create-entity-type">
+                    <option value="Project">Project</option>
+                    <option value="SubProject">Sub Project</option>
+                </select>
+                <span asp-validation-for="CreateEntityInput.EntityType" class="text-danger"></span>
+            </div>
+            <div class="mb-3" id="parent-project-wrapper" style="display:none;">
+                <label asp-for="CreateEntityInput.ParentProjectId" class="form-label"></label>
+                <select asp-for="CreateEntityInput.ParentProjectId" asp-items="Model.ProjectOptions" class="form-select" id="parent-project-select">
+                    <option value="">Select parent project</option>
+                </select>
+                <span asp-validation-for="CreateEntityInput.ParentProjectId" class="text-danger"></span>
             </div>
             <div class="mb-3">
-                <label asp-for="CreateInput.Description" class="form-label"></label>
-                <textarea asp-for="CreateInput.Description" class="form-control" rows="4"></textarea>
-                <span asp-validation-for="CreateInput.Description" class="text-danger"></span>
+                <label asp-for="CreateEntityInput.Name" class="form-label"></label>
+                <input asp-for="CreateEntityInput.Name" class="form-control" />
+                <span asp-validation-for="CreateEntityInput.Name" class="text-danger"></span>
             </div>
-            <button type="submit" class="btn btn-primary">Create Project</button>
+            <div class="mb-3">
+                <label asp-for="CreateEntityInput.Description" class="form-label"></label>
+                <textarea asp-for="CreateEntityInput.Description" class="form-control" rows="4"></textarea>
+                <span asp-validation-for="CreateEntityInput.Description" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-primary">Save</button>
         </form>
-        <div class="small text-muted mt-2">
-            Suggested details: scope, owning team, environment, key external dependencies.
-        </div>
     </div>
 
     <div class="col-lg-7">
@@ -50,29 +62,60 @@
                 <tbody>
                 @foreach (var item in Model.Projects)
                 {
-                    var project = item.Project;
+                    var subProjects = Model.SubProjectsByProjectId.TryGetValue(item.Project.Id, out var children)
+                        ? children
+                        : Array.Empty<dependencies_visualizer.Services.SubProjectAccessSummary>();
                     <tr>
-                        <td>@project.Name</td>
+                        <td><strong>@item.Project.Name</strong></td>
                         <td>@item.Role</td>
-                        <td>@project.Description</td>
+                        <td>@item.Project.Description</td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-projectId="@project.Id" title="Nodes" aria-label="Nodes">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/></svg>
-                            </a>
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@project.Id" title="Relationships" aria-label="Relationships">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 5h5V3l4 3-4 3V7H2V5zm12 6H9v2l-4-3 4-3v2h5v2z"/></svg>
-                            </a>
-                            <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-projectId="@project.Id" title="Preview" aria-label="Preview">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3C4.5 3 1.6 5.2.3 8c1.3 2.8 4.2 5 7.7 5s6.4-2.2 7.7-5C14.4 5.2 11.5 3 8 3zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
-                            </a>
-                            <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@project.Id" title="Audit" aria-label="Audit">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3a.5.5 0 0 1 .5.5V8l3 1.8-.5.8L7.5 8.5V3.5A.5.5 0 0 1 8 3z"/><path d="M8 1a7 7 0 1 0 7 7A7 7 0 0 0 8 1zm0 13A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/></svg>
-                            </a>
-                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@project.Id" title="Open" aria-label="Open">
+                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@item.Project.Id" asp-route-manageSubProjectId="" title="Manage Project" aria-label="Manage Project">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.5 2a.5.5 0 0 1 0 1H4v9h9V5.5a.5.5 0 0 1 1 0V12A1 1 0 0 1 13 13H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h6.5z"/><path d="M15 1.5V5a.5.5 0 0 1-1 0V2.7l-5.1 5.1a.5.5 0 0 1-.8-.6l.1-.1L13.3 2H11a.5.5 0 0 1 0-1h3.5a.5.5 0 0 1 .5.5z"/></svg>
                             </a>
                         </td>
                     </tr>
+
+                    @if (subProjects.Count == 0)
+                    {
+                        <tr>
+                            <td class="ps-4 text-muted">No sub projects</td>
+                            <td class="text-muted">-</td>
+                            <td class="text-muted">-</td>
+                            <td></td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var subProjectItem in subProjects)
+                        {
+                            var subProject = subProjectItem.SubProject;
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="text-muted me-1" aria-hidden="true">+</span>@subProject.Name
+                                </td>
+                                <td>@subProjectItem.Role</td>
+                                <td>@subProject.Description</td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-subProjectId="@subProject.Id" title="Nodes" aria-label="Nodes">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/></svg>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-subProjectId="@subProject.Id" title="Relationships" aria-label="Relationships">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 5h5V3l4 3-4 3V7H2V5zm12 6H9v2l-4-3 4-3v2h5v2z"/></svg>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-subProjectId="@subProject.Id" title="Preview" aria-label="Preview">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3C4.5 3 1.6 5.2.3 8c1.3 2.8 4.2 5 7.7 5s6.4-2.2 7.7-5C14.4 5.2 11.5 3 8 3zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@item.Project.Id" title="Audit" aria-label="Audit">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3a.5.5 0 0 1 .5.5V8l3 1.8-.5.8L7.5 8.5V3.5A.5.5 0 0 1 8 3z"/><path d="M8 1a7 7 0 1 0 7 7A7 7 0 0 0 8 1zm0 13A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/></svg>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@item.Project.Id" asp-route-manageSubProjectId="@subProject.Id" title="Manage Sub Project" aria-label="Manage Sub Project">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.6 1.5a.5.5 0 0 1 .48.36l.2.64a4.6 4.6 0 0 1 .9.52l.63-.2a.5.5 0 0 1 .55.2l.8 1.38a.5.5 0 0 1-.08.58l-.44.5a4.9 4.9 0 0 1 0 1.04l.44.5a.5.5 0 0 1 .08.58l-.8 1.38a.5.5 0 0 1-.55.2l-.63-.2a4.6 4.6 0 0 1-.9.52l-.2.64a.5.5 0 0 1-.48.36H8.4a.5.5 0 0 1-.48-.36l-.2-.64a4.6 4.6 0 0 1-.9-.52l-.63.2a.5.5 0 0 1-.55-.2l-.8-1.38a.5.5 0 0 1 .08-.58l.44-.5a4.9 4.9 0 0 1 0-1.04l-.44-.5a.5.5 0 0 1-.08-.58l.8-1.38a.5.5 0 0 1 .55-.2l.63.2c.28-.2.58-.37.9-.52l.2-.64a.5.5 0 0 1 .48-.36h1.2zM9 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0z"/></svg>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
                 }
                 </tbody>
             </table>
@@ -80,17 +123,13 @@
     </div>
 </div>
 
-@if (Model.ManagedProject is not null)
+@if (Model.ManagedProject is not null && !Model.ManageSubProjectId.HasValue)
 {
     <hr class="my-4" />
     <h2 class="h4">Project: @Model.ManagedProject.Name</h2>
     <p class="text-muted mb-3">Owner: @Model.ManagedProject.OwnerUsername</p>
 
-    @if (!Model.CanManageSelectedProject)
-    {
-        <p class="text-muted">You are a contributor for this project. Project settings and membership are maintainer-only.</p>
-    }
-    else
+    @if (Model.CanManageSelectedProject)
     {
         <div class="row g-4">
             <div class="col-lg-6">
@@ -112,77 +151,111 @@
             </div>
 
             <div class="col-lg-6">
-                <h3 class="h5">Add Member</h3>
-                <form method="post" asp-page-handler="AddMember" class="card p-3 mb-3">
-                    <input type="hidden" asp-for="MemberInput.ProjectId" />
+                <h3 class="h5">Add Project Member</h3>
+                <form method="post" asp-page-handler="AddProjectMember" class="card p-3 mb-3">
+                    <input type="hidden" asp-for="ProjectMemberInput.ProjectId" />
                     <div class="mb-3">
-                        <label asp-for="MemberInput.Username" class="form-label"></label>
-                        <select asp-for="MemberInput.Username" asp-items="Model.MemberUserOptions" class="form-select">
+                        <label asp-for="ProjectMemberInput.Username" class="form-label"></label>
+                        <select asp-for="ProjectMemberInput.Username" asp-items="Model.MemberUserOptions" class="form-select">
                             <option value="">Select user</option>
                         </select>
-                        <span asp-validation-for="MemberInput.Username" class="text-danger"></span>
+                        <span asp-validation-for="ProjectMemberInput.Username" class="text-danger"></span>
                     </div>
-                    <div class="mb-3">
-                        <label asp-for="MemberInput.Role" class="form-label"></label>
-                        <select asp-for="MemberInput.Role" class="form-select">
-                            <option value="Maintainer">Maintainer</option>
-                            <option value="Contributor">Contributor</option>
-                        </select>
-                        <span asp-validation-for="MemberInput.Role" class="text-danger"></span>
-                    </div>
+                    <div class="small text-muted mb-2">Project members are always added as <strong>Maintainers</strong>.</div>
                     <button type="submit" class="btn btn-primary">Add Member</button>
                 </form>
 
                 <h3 class="h5 text-danger">Delete Project</h3>
-                <form method="post" asp-page-handler="DeleteProject" class="card p-3 border-danger-subtle" onsubmit="return confirm('Delete this project and all related data?');">
+                <form method="post" asp-page-handler="DeleteProject" class="card p-3 border-danger-subtle" onsubmit="return confirm('Delete this project and all sub projects?');">
                     <input type="hidden" asp-for="DeleteInput.ProjectId" />
-                    <p class="small text-muted mb-2">This deletes all nodes, relationships, and saved layout positions in this project.</p>
+                    <p class="small text-muted mb-2">This deletes all sub projects, nodes, relationships, layouts, and project audit entries.</p>
                     <button type="submit" class="btn btn-outline-danger">Delete Project</button>
                 </form>
             </div>
         </div>
-    }
 
-    <h3 class="h5 mt-4">Members</h3>
-    @if (!Model.Members.Any())
-    {
-        <p class="text-muted">No members found.</p>
-    }
-    else
-    {
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Username</th>
-                    <th>Role</th>
-                    @if (Model.CanManageSelectedProject)
-                    {
+        <h3 class="h5 mt-4">Project Members</h3>
+        @if (!Model.ProjectMembers.Any())
+        {
+            <p class="text-muted">No project members yet.</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
                         <th class="text-end">Actions</th>
-                    }
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var member in Model.Members)
-            {
-                <tr>
-                    <td>@member.Username</td>
-                    <td>@member.Role</td>
-                    @if (Model.CanManageSelectedProject)
-                    {
-                        var isCurrentUser = string.Equals(member.Username, currentUsername, StringComparison.OrdinalIgnoreCase);
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var member in Model.ProjectMembers)
+                {
+                    var isCurrentUser = string.Equals(member.Username, currentUsername, StringComparison.OrdinalIgnoreCase);
+                    <tr>
+                        <td>@member.Username</td>
+                        <td>@member.Role</td>
                         <td class="text-end">
                             @if (!isCurrentUser)
                             {
-                                <form method="post" asp-page-handler="RemoveMember" class="d-inline" onsubmit="return confirm('Remove this user from the project?');">
-                                    <input type="hidden" name="RemoveMemberInput.ProjectId" value="@Model.ManagedProject?.Id" />
-                                    <input type="hidden" name="RemoveMemberInput.Username" value="@member.Username" />
+                                <form method="post" asp-page-handler="RemoveProjectMember" class="d-inline" onsubmit="return confirm('Remove this user from project?');">
+                                    <input type="hidden" name="RemoveProjectMemberInput.ProjectId" value="@Model.ManagedProject!.Id" />
+                                    <input type="hidden" name="RemoveProjectMemberInput.Username" value="@member.Username" />
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" aria-label="Remove">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
                                     </button>
                                 </form>
                             }
                         </td>
-                    }
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+
+    <h3 class="h5 mt-4">Sub Projects</h3>
+    @if (!Model.SubProjects.Any())
+    {
+        <p class="text-muted">No sub projects available.</p>
+    }
+    else
+    {
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Description</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model.SubProjects)
+            {
+                var subProject = item.SubProject;
+                <tr>
+                    <td>@subProject.Name</td>
+                    <td>@item.Role</td>
+                    <td>@subProject.Description</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-primary" asp-page="/Nodes/Index" asp-route-subProjectId="@subProject.Id" title="Nodes" aria-label="Nodes">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/></svg>
+                        </a>
+                        <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-subProjectId="@subProject.Id" title="Relationships" aria-label="Relationships">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 5h5V3l4 3-4 3V7H2V5zm12 6H9v2l-4-3 4-3v2h5v2z"/></svg>
+                        </a>
+                        <a class="btn btn-sm btn-outline-dark" asp-page="/Preview/Index" asp-route-subProjectId="@subProject.Id" title="Preview" aria-label="Preview">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3C4.5 3 1.6 5.2.3 8c1.3 2.8 4.2 5 7.7 5s6.4-2.2 7.7-5C14.4 5.2 11.5 3 8 3zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                        </a>
+                        <a class="btn btn-sm btn-outline-dark" asp-page="/Projects/Audit" asp-route-projectId="@Model.ManagedProject!.Id" title="Audit" aria-label="Audit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 3a.5.5 0 0 1 .5.5V8l3 1.8-.5.8L7.5 8.5V3.5A.5.5 0 0 1 8 3z"/><path d="M8 1a7 7 0 1 0 7 7A7 7 0 0 0 8 1zm0 13A6 6 0 1 1 8 2a6 6 0 0 1 0 12z"/></svg>
+                        </a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-page="/Projects/Index" asp-route-manageProjectId="@Model.ManagedProject!.Id" asp-route-manageSubProjectId="@subProject.Id" title="Manage" aria-label="Manage">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.6 1.5a.5.5 0 0 1 .48.36l.2.64a4.6 4.6 0 0 1 .9.52l.63-.2a.5.5 0 0 1 .55.2l.8 1.38a.5.5 0 0 1-.08.58l-.44.5a4.9 4.9 0 0 1 0 1.04l.44.5a.5.5 0 0 1 .08.58l-.8 1.38a.5.5 0 0 1-.55.2l-.63-.2a4.6 4.6 0 0 1-.9.52l-.2.64a.5.5 0 0 1-.48.36H8.4a.5.5 0 0 1-.48-.36l-.2-.64a4.6 4.6 0 0 1-.9-.52l-.63.2a.5.5 0 0 1-.55-.2l-.8-1.38a.5.5 0 0 1 .08-.58l.44-.5a4.9 4.9 0 0 1 0-1.04l-.44-.5a.5.5 0 0 1-.08-.58l.8-1.38a.5.5 0 0 1 .55-.2l.63.2c.28-.2.58-.37.9-.52l.2-.64a.5.5 0 0 1 .48-.36h1.2zM9 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0z"/></svg>
+                        </a>
+                    </td>
                 </tr>
             }
             </tbody>
@@ -190,6 +263,147 @@
     }
 }
 
+@if (Model.ManagedSubProject is not null)
+{
+        <hr class="my-4" />
+        <h3 class="h5">Manage Sub Project: @Model.ManagedSubProject.Name</h3>
+
+        @if (!Model.CanEditSelectedSubProject)
+        {
+            <p class="text-muted">You do not have access to edit this sub project.</p>
+        }
+        else
+        {
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h4 class="h6">Edit Sub Project Details</h4>
+                    <form method="post" asp-page-handler="UpdateSubProject" class="card p-3">
+                        <input type="hidden" asp-for="UpdateSubProjectInput.ProjectId" />
+                        <input type="hidden" asp-for="UpdateSubProjectInput.SubProjectId" />
+                        <div class="mb-3">
+                            <label asp-for="UpdateSubProjectInput.Name" class="form-label"></label>
+                            <input asp-for="UpdateSubProjectInput.Name" class="form-control" />
+                            <span asp-validation-for="UpdateSubProjectInput.Name" class="text-danger"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="UpdateSubProjectInput.Description" class="form-label"></label>
+                            <textarea asp-for="UpdateSubProjectInput.Description" class="form-control" rows="3"></textarea>
+                            <span asp-validation-for="UpdateSubProjectInput.Description" class="text-danger"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Sub Project</button>
+                    </form>
+                </div>
+
+                @if (Model.CanManageSelectedSubProject)
+                {
+                    <div class="col-lg-6">
+
+                        <h4 class="h6">Add Sub Project Member</h4>
+                        <form method="post" asp-page-handler="AddSubProjectMember" class="card p-3">
+                            <input type="hidden" asp-for="SubProjectMemberInput.ProjectId" />
+                            <input type="hidden" asp-for="SubProjectMemberInput.SubProjectId" />
+                            <div class="mb-3">
+                                <label asp-for="SubProjectMemberInput.Username" class="form-label"></label>
+                                <select asp-for="SubProjectMemberInput.Username" asp-items="Model.MemberUserOptions" class="form-select">
+                                    <option value="">Select user</option>
+                                </select>
+                                <span asp-validation-for="SubProjectMemberInput.Username" class="text-danger"></span>
+                            </div>
+                            <div class="mb-3">
+                                <label asp-for="SubProjectMemberInput.Role" class="form-label"></label>
+                                <select asp-for="SubProjectMemberInput.Role" class="form-select">
+                                    <option value="Maintainer">Maintainer</option>
+                                    <option value="Contributor">Contributor</option>
+                                </select>
+                                <span asp-validation-for="SubProjectMemberInput.Role" class="text-danger"></span>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Member</button>
+                        </form>
+
+                        <h4 class="h6">Delete Sub Project</h4>
+                        <form method="post" asp-page-handler="DeleteSubProject" class="card p-3 border-danger-subtle mb-3" onsubmit="return confirm('Delete this sub project and all related nodes/relationships/layouts?');">
+                            <input type="hidden" asp-for="DeleteSubProjectInput.ProjectId" />
+                            <input type="hidden" asp-for="DeleteSubProjectInput.SubProjectId" />
+                            <p class="small text-muted mb-2">This deletes all nodes, relationships, layouts, and project audit entries.</p>
+                            <button type="submit" class="btn btn-outline-danger">Delete Sub Project</button>
+                        </form>
+                    </div>
+                }
+            </div>
+
+            @if (Model.CanManageSelectedSubProject)
+            {
+                <div class="row g-4 mt-1">
+                    <div class="col-lg-6">
+                        <h4 class="h6">Sub Project Members</h4>
+                        @if (!Model.SubProjectMembers.Any())
+                        {
+                            <p class="text-muted">No members yet.</p>
+                        }
+                        else
+                        {
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var member in Model.SubProjectMembers)
+                                {
+                                    var isCurrentUser = string.Equals(member.Username, currentUsername, StringComparison.OrdinalIgnoreCase);
+                                    <tr>
+                                        <td>@member.Username</td>
+                                        <td>@member.Role</td>
+                                        <td class="text-end">
+                                            @if (!isCurrentUser)
+                                            {
+                                                <form method="post" asp-page-handler="RemoveSubProjectMember" class="d-inline" onsubmit="return confirm('Remove this user from sub project?');">
+                                                    <input type="hidden" name="RemoveSubProjectMemberInput.ProjectId" value="@Model.ManagedProject!.Id" />
+                                                    <input type="hidden" name="RemoveSubProjectMemberInput.SubProjectId" value="@Model.ManagedSubProject.Id" />
+                                                    <input type="hidden" name="RemoveSubProjectMemberInput.Username" value="@member.Username" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove" aria-label="Remove">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>
+                                                    </button>
+                                                </form>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+        }
+    }
+}
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const typeSelect = document.getElementById("create-entity-type");
+            const parentWrapper = document.getElementById("parent-project-wrapper");
+            const parentSelect = document.getElementById("parent-project-select");
+
+            const updateParentVisibility = () => {
+                const isSubProject = typeSelect?.value === "SubProject";
+                if (!parentWrapper || !parentSelect) {
+                    return;
+                }
+
+                parentWrapper.style.display = isSubProject ? "block" : "none";
+                parentSelect.required = isSubProject;
+                if (!isSubProject) {
+                    parentSelect.value = "";
+                }
+            };
+
+            typeSelect?.addEventListener("change", updateParentVisibility);
+            updateParentVisibility();
+        })();
+    </script>
 }

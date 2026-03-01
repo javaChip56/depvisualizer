@@ -6,9 +6,9 @@
 }
 
 <p class="text-muted mb-3">
-    Project: <strong>@Model.CurrentProject?.Name</strong>
+    Project: <strong>@Model.CurrentProject?.Name</strong> / Sub Project: <strong>@Model.CurrentSubProject?.Name</strong>
     <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
-    <a class="ms-2" asp-page="/Projects/Audit" asp-route-projectId="@Model.ProjectId">View audit</a>
+    <a class="ms-2" asp-page="/Projects/Audit" asp-route-projectId="@Model.CurrentProject?.Id">View audit</a>
 </p>
 
 <div class="row g-4">
@@ -23,7 +23,7 @@
         {
             <form method="post" class="card p-3">
                 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
-                <input type="hidden" asp-for="ProjectId" />
+                <input type="hidden" asp-for="SubProjectId" />
                 <input type="hidden" asp-for="Input.Id" />
 
                 <div class="mb-3">
@@ -48,7 +48,7 @@
                     <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Relationship" : "Add Relationship")</button>
                     @if (Model.IsEditing)
                     {
-                        <a class="btn btn-outline-secondary" asp-page="/Relationships/Index" asp-route-projectId="@Model.ProjectId">Cancel</a>
+                        <a class="btn btn-outline-secondary" asp-page="/Relationships/Index" asp-route-subProjectId="@Model.SubProjectId">Cancel</a>
                     }
                 </div>
             </form>
@@ -82,10 +82,10 @@
                         <td>@relationship.Label</td>
                         <td>@target.Name (@target.Type)</td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-projectId="@Model.ProjectId" asp-route-editId="@relationship.Id" title="Edit" aria-label="Edit">
+                            <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-subProjectId="@Model.SubProjectId" asp-route-editId="@relationship.Id" title="Edit" aria-label="Edit">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-9.5 9.5L3 14l.646-2.646 9.5-9.5zM11.207 2 4 9.207V10h.793L12 2.793 11.207 2z"/></svg>
                             </a>
-                            <form method="post" asp-page-handler="Delete" asp-route-projectId="@Model.ProjectId" class="d-inline" onsubmit="return confirm('Delete this relationship?');">
+                            <form method="post" asp-page-handler="Delete" asp-route-subProjectId="@Model.SubProjectId" class="d-inline" onsubmit="return confirm('Delete this relationship?');">
                                 <input type="hidden" name="deleteId" value="@relationship.Id" />
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" aria-label="Delete">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h2.5l.5-.5h4l.5.5H13a1 1 0 0 1 1 1zM4.118 5 4.5 13.5A1.5 1.5 0 0 0 6 15h4a1.5 1.5 0 0 0 1.5-1.5L11.882 5H4.118z"/></svg>

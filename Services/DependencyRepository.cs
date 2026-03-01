@@ -7,12 +7,15 @@ public sealed class DependencyRepository
     private readonly object _syncRoot = new();
     private readonly List<Project> _projects = [];
     private readonly Dictionary<int, Dictionary<string, ProjectMemberRole>> _projectMembersByProjectId = [];
+    private readonly List<SubProject> _subProjects = [];
+    private readonly Dictionary<int, Dictionary<string, ProjectMemberRole>> _subProjectMembersBySubProjectId = [];
     private readonly List<Node> _nodes = [];
     private readonly List<DependencyRelationship> _relationships = [];
     private readonly Dictionary<int, List<ProjectAuditEntry>> _auditEntriesByProjectId = [];
-    private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _maintainerLayoutByProjectId = [];
-    private readonly Dictionary<int, Dictionary<string, Dictionary<string, NodeLayoutPosition>>> _contributorLayoutByProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _maintainerLayoutBySubProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, Dictionary<string, NodeLayoutPosition>>> _contributorLayoutBySubProjectId = [];
     private int _nextProjectId = 1;
+    private int _nextSubProjectId = 1;
     private int _nextNodeId = 1;
     private int _nextRelationshipId = 1;
 
@@ -22,14 +25,23 @@ public sealed class DependencyRepository
         lock (_syncRoot)
         {
             return _projects
-                .Select(p => new
+                .Select(project =>
                 {
-                    Project = p,
-                    Role = GetRoleUnsafe(p.Id, normalizedUsername, isAdmin)
+                    var projectRole = GetProjectRoleUnsafe(project.Id, normalizedUsername, isAdmin);
+                    if (projectRole != ProjectMemberRole.None)
+                    {
+                        return new ProjectAccessSummary(project, projectRole);
+                    }
+
+                    var subProjectRole = GetHighestSubProjectRoleForProjectUnsafe(project.Id, normalizedUsername, isAdmin);
+                    // Project row reflects project-level access only; subproject-only access maps to Contributor.
+                    var projectDisplayRole = subProjectRole == ProjectMemberRole.None
+                        ? ProjectMemberRole.None
+                        : ProjectMemberRole.Contributor;
+                    return new ProjectAccessSummary(project, projectDisplayRole);
                 })
                 .Where(x => x.Role != ProjectMemberRole.None)
                 .OrderBy(x => x.Project.Name)
-                .Select(x => new ProjectAccessSummary(x.Project, x.Role))
                 .ToList();
         }
     }
@@ -42,23 +54,61 @@ public sealed class DependencyRepository
         }
     }
 
+    public SubProject? GetSubProjectById(int subProjectId)
+    {
+        lock (_syncRoot)
+        {
+            return _subProjects.FirstOrDefault(sp => sp.Id == subProjectId);
+        }
+    }
+
     public ProjectMemberRole GetUserRoleForProject(int projectId, string username, bool isAdmin)
     {
         var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            return GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            return GetProjectRoleUnsafe(projectId, normalizedUsername, isAdmin);
+        }
+    }
+
+    public ProjectMemberRole GetUserRoleForSubProject(int subProjectId, string username, bool isAdmin)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            return GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
         }
     }
 
     public bool UserCanAccessProject(int projectId, string username, bool isAdmin)
     {
-        return GetUserRoleForProject(projectId, username, isAdmin) != ProjectMemberRole.None;
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            if (GetProjectRoleUnsafe(projectId, normalizedUsername, isAdmin) != ProjectMemberRole.None)
+            {
+                return true;
+            }
+
+            return _subProjects
+                .Where(sp => sp.ProjectId == projectId)
+                .Any(sp => GetSubProjectRoleUnsafe(sp.Id, normalizedUsername, isAdmin) != ProjectMemberRole.None);
+        }
     }
 
     public bool UserCanManageProject(int projectId, string username, bool isAdmin)
     {
         return GetUserRoleForProject(projectId, username, isAdmin) == ProjectMemberRole.Maintainer;
+    }
+
+    public bool UserCanAccessSubProject(int subProjectId, string username, bool isAdmin)
+    {
+        return GetUserRoleForSubProject(subProjectId, username, isAdmin) != ProjectMemberRole.None;
+    }
+
+    public bool UserCanManageSubProject(int subProjectId, string username, bool isAdmin)
+    {
+        return GetUserRoleForSubProject(subProjectId, username, isAdmin) == ProjectMemberRole.Maintainer;
     }
 
     public IReadOnlyList<ProjectMemberSummary> GetProjectMembers(int projectId)
@@ -70,10 +120,48 @@ public sealed class DependencyRepository
                 return [];
             }
 
-            return members
-                .OrderBy(m => m.Key)
-                .Select(m => new ProjectMemberSummary(m.Key, m.Value))
+            return members.OrderBy(m => m.Key).Select(m => new ProjectMemberSummary(m.Key, m.Value)).ToList();
+        }
+    }
+
+    public IReadOnlyList<SubProjectAccessSummary> GetSubProjectsForProject(int projectId, string username, bool isAdmin)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            var canManageProject = GetProjectRoleUnsafe(projectId, normalizedUsername, isAdmin) == ProjectMemberRole.Maintainer;
+            return _subProjects
+                .Where(sp => sp.ProjectId == projectId)
+                .Select(sp =>
+                {
+                    var directRole = GetDirectSubProjectRoleUnsafe(sp.Id, normalizedUsername);
+                    var role = directRole != ProjectMemberRole.None
+                        ? directRole
+                        : (canManageProject ? ProjectMemberRole.Maintainer : GetSubProjectRoleUnsafe(sp.Id, normalizedUsername, isAdmin));
+                    return new SubProjectAccessSummary(sp, role);
+                })
+                .Where(x => x.Role != ProjectMemberRole.None)
+                .OrderBy(x => x.SubProject.Name)
                 .ToList();
+        }
+    }
+
+    public IReadOnlyList<SubProjectMemberSummary> GetSubProjectMembers(int subProjectId, string username, bool isAdmin)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            if (GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin) == ProjectMemberRole.None)
+            {
+                return [];
+            }
+
+            if (!_subProjectMembersBySubProjectId.TryGetValue(subProjectId, out var members))
+            {
+                return [];
+            }
+
+            return members.OrderBy(m => m.Key).Select(m => new SubProjectMemberSummary(m.Key, m.Value)).ToList();
         }
     }
 
@@ -82,7 +170,7 @@ public sealed class DependencyRepository
         var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            if (GetRoleUnsafe(projectId, normalizedUsername, isAdmin) == ProjectMemberRole.None)
+            if (!UserCanAccessProject(projectId, normalizedUsername, isAdmin))
             {
                 return [];
             }
@@ -92,9 +180,7 @@ public sealed class DependencyRepository
                 return [];
             }
 
-            return entries
-                .OrderByDescending(e => e.TimestampUtc)
-                .ToList();
+            return entries.OrderByDescending(e => e.TimestampUtc).ToList();
         }
     }
 
@@ -155,7 +241,7 @@ public sealed class DependencyRepository
         var normalizedActor = NormalizeUsername(actorUsername);
         lock (_syncRoot)
         {
-            if (GetRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
             {
                 error = "Only maintainers can update project details.";
                 return false;
@@ -180,7 +266,7 @@ public sealed class DependencyRepository
         var normalizedActor = NormalizeUsername(actorUsername);
         lock (_syncRoot)
         {
-            if (GetRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
             {
                 error = "Only maintainers can delete projects.";
                 return false;
@@ -194,22 +280,25 @@ public sealed class DependencyRepository
             }
 
             _projectMembersByProjectId.Remove(projectId);
+
+            var deletedSubProjectIds = _subProjects.Where(sp => sp.ProjectId == projectId).Select(sp => sp.Id).ToList();
+            _subProjects.RemoveAll(sp => sp.ProjectId == projectId);
+
+            foreach (var subProjectId in deletedSubProjectIds)
+            {
+                _subProjectMembersBySubProjectId.Remove(subProjectId);
+                _maintainerLayoutBySubProjectId.Remove(subProjectId);
+                _contributorLayoutBySubProjectId.Remove(subProjectId);
+            }
+
             _nodes.RemoveAll(n => n.ProjectId == projectId);
             _relationships.RemoveAll(r => r.ProjectId == projectId);
             _auditEntriesByProjectId.Remove(projectId);
-            _maintainerLayoutByProjectId.Remove(projectId);
-            _contributorLayoutByProjectId.Remove(projectId);
             return true;
         }
     }
 
-    public bool AddOrUpdateMember(
-        int projectId,
-        string actorUsername,
-        bool actorIsAdmin,
-        string memberUsername,
-        ProjectMemberRole role,
-        out string? error)
+    public bool AddOrUpdateMember(int projectId, string actorUsername, bool actorIsAdmin, string memberUsername, ProjectMemberRole role, out string? error)
     {
         error = null;
         var normalizedActor = NormalizeUsername(actorUsername);
@@ -217,6 +306,12 @@ public sealed class DependencyRepository
         if (role == ProjectMemberRole.None)
         {
             error = "Invalid role.";
+            return false;
+        }
+
+        if (role != ProjectMemberRole.Maintainer)
+        {
+            error = "Project-level members must be maintainers.";
             return false;
         }
 
@@ -228,7 +323,7 @@ public sealed class DependencyRepository
 
         lock (_syncRoot)
         {
-            if (GetRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
             {
                 error = "Only maintainers can manage members.";
                 return false;
@@ -240,29 +335,12 @@ public sealed class DependencyRepository
                 return false;
             }
 
-            if (members.TryGetValue(normalizedMember, out var existingRole) &&
-                existingRole == ProjectMemberRole.Maintainer &&
-                role != ProjectMemberRole.Maintainer)
-            {
-                var maintainerCount = members.Count(m => m.Value == ProjectMemberRole.Maintainer);
-                if (maintainerCount <= 1)
-                {
-                    error = "A project must have at least one maintainer.";
-                    return false;
-                }
-            }
-
             members[normalizedMember] = role;
             return true;
         }
     }
 
-    public bool RemoveMember(
-        int projectId,
-        string actorUsername,
-        bool actorIsAdmin,
-        string memberUsername,
-        out string? error)
+    public bool RemoveMember(int projectId, string actorUsername, bool actorIsAdmin, string memberUsername, out string? error)
     {
         error = null;
         var normalizedActor = NormalizeUsername(actorUsername);
@@ -275,7 +353,7 @@ public sealed class DependencyRepository
 
         lock (_syncRoot)
         {
-            if (GetRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
             {
                 error = "Only maintainers can manage members.";
                 return false;
@@ -308,14 +386,243 @@ public sealed class DependencyRepository
         }
     }
 
-    public IReadOnlyList<Node> GetNodes(int projectId)
+    public bool CreateSubProject(int projectId, string actorUsername, bool actorIsAdmin, string name, string? description, out SubProject? subProject, out string? error)
+    {
+        subProject = null;
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+
+        lock (_syncRoot)
+        {
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            {
+                error = "Only project maintainers can create sub projects.";
+                return false;
+            }
+
+            if (!_projects.Any(p => p.Id == projectId))
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            var trimmedName = name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmedName))
+            {
+                error = "Sub project name is required.";
+                return false;
+            }
+
+            var duplicateName = _subProjects.Any(sp => sp.ProjectId == projectId && string.Equals(sp.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
+            if (duplicateName)
+            {
+                error = "A sub project with this name already exists in the project.";
+                return false;
+            }
+
+            var created = new SubProject
+            {
+                Id = _nextSubProjectId++,
+                ProjectId = projectId,
+                Name = trimmedName,
+                Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                CreatedUtc = DateTime.UtcNow
+            };
+
+            _subProjects.Add(created);
+            _subProjectMembersBySubProjectId[created.Id] = new Dictionary<string, ProjectMemberRole>(StringComparer.OrdinalIgnoreCase)
+            {
+                [normalizedActor] = ProjectMemberRole.Maintainer
+            };
+            subProject = created;
+            return true;
+        }
+    }
+
+    public bool UpdateSubProject(int projectId, int subProjectId, string actorUsername, bool actorIsAdmin, string name, string? description, out string? error)
+    {
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+
+        lock (_syncRoot)
+        {
+            var existing = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId && sp.ProjectId == projectId);
+            if (existing is null)
+            {
+                error = "Sub project not found.";
+                return false;
+            }
+
+            if (GetSubProjectRoleUnsafe(subProjectId, normalizedActor, actorIsAdmin) == ProjectMemberRole.None)
+            {
+                error = "Only sub project members can update sub project details.";
+                return false;
+            }
+
+            var trimmedName = name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmedName))
+            {
+                error = "Sub project name is required.";
+                return false;
+            }
+
+            var duplicateName = _subProjects.Any(sp => sp.ProjectId == projectId && sp.Id != subProjectId && string.Equals(sp.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
+            if (duplicateName)
+            {
+                error = "A sub project with this name already exists in the project.";
+                return false;
+            }
+
+            existing.Name = trimmedName;
+            existing.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            return true;
+        }
+    }
+
+    public bool DeleteSubProject(int projectId, int subProjectId, string actorUsername, bool actorIsAdmin, out string? error)
+    {
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+
+        lock (_syncRoot)
+        {
+            if (GetProjectRoleUnsafe(projectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            {
+                error = "Only project maintainers can delete sub projects.";
+                return false;
+            }
+
+            var existing = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId && sp.ProjectId == projectId);
+            if (existing is null)
+            {
+                error = "Sub project not found.";
+                return false;
+            }
+
+            _subProjects.Remove(existing);
+            _subProjectMembersBySubProjectId.Remove(subProjectId);
+            _nodes.RemoveAll(n => n.SubProjectId == subProjectId);
+            _relationships.RemoveAll(r => r.SubProjectId == subProjectId);
+            _maintainerLayoutBySubProjectId.Remove(subProjectId);
+            _contributorLayoutBySubProjectId.Remove(subProjectId);
+            return true;
+        }
+    }
+
+    public bool AddOrUpdateSubProjectMember(int projectId, int subProjectId, string actorUsername, bool actorIsAdmin, string memberUsername, ProjectMemberRole role, out string? error)
+    {
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+        var normalizedMember = NormalizeUsername(memberUsername);
+
+        if (role == ProjectMemberRole.None)
+        {
+            error = "Invalid role.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedMember))
+        {
+            error = "Username is required.";
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            if (GetSubProjectRoleUnsafe(subProjectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            {
+                error = "Only sub project maintainers can manage sub project members.";
+                return false;
+            }
+
+            var subProject = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId && sp.ProjectId == projectId);
+            if (subProject is null)
+            {
+                error = "Sub project not found.";
+                return false;
+            }
+
+            if (!_subProjectMembersBySubProjectId.TryGetValue(subProjectId, out var members))
+            {
+                members = new Dictionary<string, ProjectMemberRole>(StringComparer.OrdinalIgnoreCase);
+                _subProjectMembersBySubProjectId[subProjectId] = members;
+            }
+
+            if (members.TryGetValue(normalizedMember, out var existingRole) &&
+                existingRole == ProjectMemberRole.Maintainer &&
+                role != ProjectMemberRole.Maintainer)
+            {
+                var maintainerCount = members.Count(m => m.Value == ProjectMemberRole.Maintainer);
+                if (maintainerCount <= 1)
+                {
+                    error = "A sub project must have at least one maintainer.";
+                    return false;
+                }
+            }
+
+            members[normalizedMember] = role;
+            return true;
+        }
+    }
+
+    public bool RemoveSubProjectMember(int projectId, int subProjectId, string actorUsername, bool actorIsAdmin, string memberUsername, out string? error)
+    {
+        error = null;
+        var normalizedActor = NormalizeUsername(actorUsername);
+        var normalizedMember = NormalizeUsername(memberUsername);
+        if (string.IsNullOrWhiteSpace(normalizedMember))
+        {
+            error = "Username is required.";
+            return false;
+        }
+
+        lock (_syncRoot)
+        {
+            if (GetSubProjectRoleUnsafe(subProjectId, normalizedActor, actorIsAdmin) != ProjectMemberRole.Maintainer)
+            {
+                error = "Only sub project maintainers can manage sub project members.";
+                return false;
+            }
+
+            var subProject = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId && sp.ProjectId == projectId);
+            if (subProject is null)
+            {
+                error = "Sub project not found.";
+                return false;
+            }
+
+            if (!_subProjectMembersBySubProjectId.TryGetValue(subProjectId, out var members))
+            {
+                error = "Sub project has no members.";
+                return false;
+            }
+
+            if (!members.TryGetValue(normalizedMember, out var existingRole))
+            {
+                error = "Member not found in sub project.";
+                return false;
+            }
+
+            if (existingRole == ProjectMemberRole.Maintainer)
+            {
+                var maintainerCount = members.Count(m => m.Value == ProjectMemberRole.Maintainer);
+                if (maintainerCount <= 1)
+                {
+                    error = "A sub project must have at least one maintainer.";
+                    return false;
+                }
+            }
+
+            members.Remove(normalizedMember);
+            return true;
+        }
+    }
+
+    public IReadOnlyList<Node> GetNodes(int subProjectId)
     {
         lock (_syncRoot)
         {
-            return _nodes
-                .Where(n => n.ProjectId == projectId)
-                .OrderBy(n => n.Name)
-                .ToList();
+            return _nodes.Where(n => n.SubProjectId == subProjectId).OrderBy(n => n.Name).ToList();
         }
     }
 
@@ -333,40 +640,45 @@ public sealed class DependencyRepository
         }
     }
 
-    public Node? GetNodeById(int projectId, int id)
+    public Node? GetNodeById(int subProjectId, int id)
     {
         lock (_syncRoot)
         {
-            return _nodes.FirstOrDefault(n => n.ProjectId == projectId && n.Id == id);
+            return _nodes.FirstOrDefault(n => n.SubProjectId == subProjectId && n.Id == id);
         }
     }
 
-    public IReadOnlyList<DependencyRelationship> GetRelationships(int projectId)
+    public IReadOnlyList<DependencyRelationship> GetRelationships(int subProjectId)
     {
         lock (_syncRoot)
         {
-            return _relationships
-                .Where(r => r.ProjectId == projectId)
-                .ToList();
+            return _relationships.Where(r => r.SubProjectId == subProjectId).ToList();
         }
     }
 
-    public DependencyRelationship? GetRelationshipById(int projectId, int id)
+    public DependencyRelationship? GetRelationshipById(int subProjectId, int id)
     {
         lock (_syncRoot)
         {
-            return _relationships.FirstOrDefault(r => r.ProjectId == projectId && r.Id == id);
+            return _relationships.FirstOrDefault(r => r.SubProjectId == subProjectId && r.Id == id);
         }
     }
 
-    public Node AddNode(int projectId, Node node)
+    public Node? AddNode(int subProjectId, Node node)
     {
         lock (_syncRoot)
         {
+            var subProject = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId);
+            if (subProject is null)
+            {
+                return null;
+            }
+
             var created = new Node
             {
                 Id = _nextNodeId++,
-                ProjectId = projectId,
+                ProjectId = subProject.ProjectId,
+                SubProjectId = subProjectId,
                 ParentNodeId = node.ParentNodeId,
                 Name = node.Name.Trim(),
                 Type = node.Type.Trim(),
@@ -380,12 +692,12 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool UpdateNode(int projectId, int id, Node node, out string? error)
+    public bool UpdateNode(int subProjectId, int id, Node node, out string? error)
     {
         lock (_syncRoot)
         {
             error = null;
-            var existing = _nodes.FirstOrDefault(n => n.ProjectId == projectId && n.Id == id);
+            var existing = _nodes.FirstOrDefault(n => n.SubProjectId == subProjectId && n.Id == id);
             if (existing is null)
             {
                 error = "Node not found.";
@@ -402,28 +714,26 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool DeleteNode(int projectId, int id, out string? error)
+    public bool DeleteNode(int subProjectId, int id, out string? error)
     {
         lock (_syncRoot)
         {
             error = null;
-            var existing = _nodes.FirstOrDefault(n => n.ProjectId == projectId && n.Id == id);
+            var existing = _nodes.FirstOrDefault(n => n.SubProjectId == subProjectId && n.Id == id);
             if (existing is null)
             {
                 error = "Node not found.";
                 return false;
             }
 
-            var hasRelationships = _relationships.Any(r =>
-                r.ProjectId == projectId &&
-                (r.SourceNodeId == id || r.TargetNodeId == id));
+            var hasRelationships = _relationships.Any(r => r.SubProjectId == subProjectId && (r.SourceNodeId == id || r.TargetNodeId == id));
             if (hasRelationships)
             {
                 error = "Delete relationships connected to this node before deleting it.";
                 return false;
             }
 
-            var hasChildren = _nodes.Any(n => n.ProjectId == projectId && n.ParentNodeId == id);
+            var hasChildren = _nodes.Any(n => n.SubProjectId == subProjectId && n.ParentNodeId == id);
             if (hasChildren)
             {
                 error = "Delete or reassign child nodes before deleting this compound node.";
@@ -435,19 +745,11 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool AddRelationship(int projectId, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
+    public bool AddRelationship(int subProjectId, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
     {
         lock (_syncRoot)
         {
-            var ok = TryResolveRelationship(
-                projectId,
-                selectedNodeId,
-                relatedNodeId,
-                selectedDependsOnRelated,
-                null,
-                out var sourceId,
-                out var targetId,
-                out error);
+            var ok = TryResolveRelationship(subProjectId, selectedNodeId, relatedNodeId, selectedDependsOnRelated, null, out var sourceId, out var targetId, out var projectId, out error);
             if (!ok)
             {
                 return false;
@@ -457,6 +759,7 @@ public sealed class DependencyRepository
             {
                 Id = _nextRelationshipId++,
                 ProjectId = projectId,
+                SubProjectId = subProjectId,
                 SourceNodeId = sourceId,
                 TargetNodeId = targetId
             });
@@ -465,26 +768,18 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool UpdateRelationship(int projectId, int id, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
+    public bool UpdateRelationship(int subProjectId, int id, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
     {
         lock (_syncRoot)
         {
-            var existingIndex = _relationships.FindIndex(r => r.ProjectId == projectId && r.Id == id);
+            var existingIndex = _relationships.FindIndex(r => r.SubProjectId == subProjectId && r.Id == id);
             if (existingIndex < 0)
             {
                 error = "Relationship not found.";
                 return false;
             }
 
-            var ok = TryResolveRelationship(
-                projectId,
-                selectedNodeId,
-                relatedNodeId,
-                selectedDependsOnRelated,
-                id,
-                out var sourceId,
-                out var targetId,
-                out error);
+            var ok = TryResolveRelationship(subProjectId, selectedNodeId, relatedNodeId, selectedDependsOnRelated, id, out var sourceId, out var targetId, out var projectId, out error);
             if (!ok)
             {
                 return false;
@@ -494,6 +789,7 @@ public sealed class DependencyRepository
             {
                 Id = id,
                 ProjectId = projectId,
+                SubProjectId = subProjectId,
                 SourceNodeId = sourceId,
                 TargetNodeId = targetId
             };
@@ -501,12 +797,12 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool DeleteRelationship(int projectId, int id, out string? error)
+    public bool DeleteRelationship(int subProjectId, int id, out string? error)
     {
         lock (_syncRoot)
         {
             error = null;
-            var removed = _relationships.RemoveAll(r => r.ProjectId == projectId && r.Id == id) > 0;
+            var removed = _relationships.RemoveAll(r => r.SubProjectId == subProjectId && r.Id == id) > 0;
             if (!removed)
             {
                 error = "Relationship not found.";
@@ -517,16 +813,12 @@ public sealed class DependencyRepository
         }
     }
 
-    public IReadOnlyDictionary<string, NodeLayoutPosition> GetLayoutPositions(
-        int projectId,
-        string username,
-        bool isAdmin,
-        IEnumerable<string> nodeIds)
+    public IReadOnlyDictionary<string, NodeLayoutPosition> GetLayoutPositions(int subProjectId, string username, bool isAdmin, IEnumerable<string> nodeIds)
     {
         var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            var role = GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
             if (role == ProjectMemberRole.None)
             {
                 return new Dictionary<string, NodeLayoutPosition>(StringComparer.OrdinalIgnoreCase);
@@ -535,18 +827,18 @@ public sealed class DependencyRepository
             Dictionary<string, NodeLayoutPosition>? positionsByNodeId = null;
             if (role == ProjectMemberRole.Maintainer)
             {
-                _maintainerLayoutByProjectId.TryGetValue(projectId, out positionsByNodeId);
+                _maintainerLayoutBySubProjectId.TryGetValue(subProjectId, out positionsByNodeId);
             }
             else
             {
-                if (_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts) &&
+                if (_contributorLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorLayouts) &&
                     contributorLayouts.TryGetValue(normalizedUsername, out var contributorPositions))
                 {
                     positionsByNodeId = contributorPositions;
                 }
                 else
                 {
-                    _maintainerLayoutByProjectId.TryGetValue(projectId, out positionsByNodeId);
+                    _maintainerLayoutBySubProjectId.TryGetValue(subProjectId, out positionsByNodeId);
                 }
             }
 
@@ -556,24 +848,17 @@ public sealed class DependencyRepository
             }
 
             var ids = nodeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            return positionsByNodeId
-                .Where(p => ids.Contains(p.Key))
-                .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+            return positionsByNodeId.Where(p => ids.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
         }
     }
 
-    public bool SaveLayoutPositions(
-        int projectId,
-        string username,
-        bool isAdmin,
-        IDictionary<string, NodeLayoutPosition> positions,
-        out string? error)
+    public bool SaveLayoutPositions(int subProjectId, string username, bool isAdmin, IDictionary<string, NodeLayoutPosition> positions, out string? error)
     {
         error = null;
         var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            var role = GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
             if (role == ProjectMemberRole.None)
             {
                 error = "Access denied.";
@@ -583,14 +868,14 @@ public sealed class DependencyRepository
             var clonedPositions = new Dictionary<string, NodeLayoutPosition>(positions, StringComparer.OrdinalIgnoreCase);
             if (role == ProjectMemberRole.Maintainer)
             {
-                _maintainerLayoutByProjectId[projectId] = clonedPositions;
+                _maintainerLayoutBySubProjectId[subProjectId] = clonedPositions;
                 return true;
             }
 
-            if (!_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts))
+            if (!_contributorLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorLayouts))
             {
                 contributorLayouts = new Dictionary<string, Dictionary<string, NodeLayoutPosition>>(StringComparer.OrdinalIgnoreCase);
-                _contributorLayoutByProjectId[projectId] = contributorLayouts;
+                _contributorLayoutBySubProjectId[subProjectId] = contributorLayouts;
             }
 
             contributorLayouts[normalizedUsername] = clonedPositions;
@@ -598,13 +883,13 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool ResetContributorLayout(int projectId, string username, bool isAdmin, out string? error)
+    public bool ResetContributorLayout(int subProjectId, string username, bool isAdmin, out string? error)
     {
         error = null;
         var normalizedUsername = NormalizeUsername(username);
         lock (_syncRoot)
         {
-            var role = GetRoleUnsafe(projectId, normalizedUsername, isAdmin);
+            var role = GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
             if (role == ProjectMemberRole.None)
             {
                 error = "Access denied.";
@@ -613,16 +898,16 @@ public sealed class DependencyRepository
 
             if (role == ProjectMemberRole.Maintainer)
             {
-                error = "Maintainers use the shared project layout.";
+                error = "Maintainers use the shared sub project layout.";
                 return false;
             }
 
-            if (_contributorLayoutByProjectId.TryGetValue(projectId, out var contributorLayouts))
+            if (_contributorLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorLayouts))
             {
                 contributorLayouts.Remove(normalizedUsername);
                 if (contributorLayouts.Count == 0)
                 {
-                    _contributorLayoutByProjectId.Remove(projectId);
+                    _contributorLayoutBySubProjectId.Remove(subProjectId);
                 }
             }
 
@@ -630,18 +915,11 @@ public sealed class DependencyRepository
         }
     }
 
-    private bool TryResolveRelationship(
-        int projectId,
-        int selectedNodeId,
-        int relatedNodeId,
-        bool selectedDependsOnRelated,
-        int? existingRelationshipId,
-        out int sourceId,
-        out int targetId,
-        out string? error)
+    private bool TryResolveRelationship(int subProjectId, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, int? existingRelationshipId, out int sourceId, out int targetId, out int projectId, out string? error)
     {
         sourceId = 0;
         targetId = 0;
+        projectId = 0;
         error = null;
 
         if (selectedNodeId == relatedNodeId)
@@ -650,9 +928,9 @@ public sealed class DependencyRepository
             return false;
         }
 
-        var selectedExists = _nodes.Any(n => n.ProjectId == projectId && n.Id == selectedNodeId);
-        var relatedExists = _nodes.Any(n => n.ProjectId == projectId && n.Id == relatedNodeId);
-        if (!selectedExists || !relatedExists)
+        var selected = _nodes.FirstOrDefault(n => n.SubProjectId == subProjectId && n.Id == selectedNodeId);
+        var related = _nodes.FirstOrDefault(n => n.SubProjectId == subProjectId && n.Id == relatedNodeId);
+        if (selected is null || related is null)
         {
             error = "Selected nodes were not found.";
             return false;
@@ -662,7 +940,7 @@ public sealed class DependencyRepository
         var resolvedTargetId = selectedDependsOnRelated ? relatedNodeId : selectedNodeId;
 
         var alreadyExists = _relationships.Any(r =>
-            r.ProjectId == projectId &&
+            r.SubProjectId == subProjectId &&
             r.SourceNodeId == resolvedSourceId &&
             r.TargetNodeId == resolvedTargetId &&
             (!existingRelationshipId.HasValue || r.Id != existingRelationshipId.Value));
@@ -674,20 +952,81 @@ public sealed class DependencyRepository
 
         sourceId = resolvedSourceId;
         targetId = resolvedTargetId;
+        projectId = selected.ProjectId;
         return true;
     }
 
-    private ProjectMemberRole GetRoleUnsafe(int projectId, string normalizedUsername, bool isAdmin)
+    private ProjectMemberRole GetProjectRoleUnsafe(int projectId, string normalizedUsername, bool isAdmin)
     {
         if (isAdmin)
         {
             return ProjectMemberRole.Maintainer;
         }
 
-        if (_projectMembersByProjectId.TryGetValue(projectId, out var members) &&
+        if (_projectMembersByProjectId.TryGetValue(projectId, out var members) && members.TryGetValue(normalizedUsername, out var role))
+        {
+            return role;
+        }
+
+        return ProjectMemberRole.None;
+    }
+
+    private ProjectMemberRole GetSubProjectRoleUnsafe(int subProjectId, string normalizedUsername, bool isAdmin)
+    {
+        if (isAdmin)
+        {
+            return ProjectMemberRole.Maintainer;
+        }
+
+        var subProject = _subProjects.FirstOrDefault(sp => sp.Id == subProjectId);
+        if (subProject is null)
+        {
+            return ProjectMemberRole.None;
+        }
+
+        var directRole = GetDirectSubProjectRoleUnsafe(subProjectId, normalizedUsername);
+        if (directRole != ProjectMemberRole.None)
+        {
+            return directRole;
+        }
+
+        var projectRole = GetProjectRoleUnsafe(subProject.ProjectId, normalizedUsername, isAdmin);
+        if (projectRole == ProjectMemberRole.Maintainer)
+        {
+            return ProjectMemberRole.Maintainer;
+        }
+
+        return ProjectMemberRole.None;
+    }
+
+    private ProjectMemberRole GetDirectSubProjectRoleUnsafe(int subProjectId, string normalizedUsername)
+    {
+        if (_subProjectMembersBySubProjectId.TryGetValue(subProjectId, out var members) &&
             members.TryGetValue(normalizedUsername, out var role))
         {
             return role;
+        }
+
+        return ProjectMemberRole.None;
+    }
+
+    private ProjectMemberRole GetHighestSubProjectRoleForProjectUnsafe(int projectId, string normalizedUsername, bool isAdmin)
+    {
+        if (isAdmin)
+        {
+            return ProjectMemberRole.Maintainer;
+        }
+
+        var roles = _subProjects.Where(sp => sp.ProjectId == projectId).Select(sp => GetSubProjectRoleUnsafe(sp.Id, normalizedUsername, isAdmin));
+
+        if (roles.Contains(ProjectMemberRole.Maintainer))
+        {
+            return ProjectMemberRole.Maintainer;
+        }
+
+        if (roles.Contains(ProjectMemberRole.Contributor))
+        {
+            return ProjectMemberRole.Contributor;
         }
 
         return ProjectMemberRole.None;
@@ -701,12 +1040,14 @@ public sealed class DependencyRepository
     private static string NormalizeHexColor(string? color, string fallback)
     {
         var value = color?.Trim() ?? string.Empty;
-        return System.Text.RegularExpressions.Regex.IsMatch(value, "^#[0-9a-fA-F]{6}$")
-            ? value.ToLowerInvariant()
-            : fallback;
+        return System.Text.RegularExpressions.Regex.IsMatch(value, "^#[0-9a-fA-F]{6}$") ? value.ToLowerInvariant() : fallback;
     }
 }
 
 public sealed record ProjectAccessSummary(Project Project, ProjectMemberRole Role);
 
 public sealed record ProjectMemberSummary(string Username, ProjectMemberRole Role);
+
+public sealed record SubProjectAccessSummary(SubProject SubProject, ProjectMemberRole Role);
+
+public sealed record SubProjectMemberSummary(string Username, ProjectMemberRole Role);

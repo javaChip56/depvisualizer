@@ -17,9 +17,9 @@
             ["lineColor"] = node.LineColor,
             ["fillColor"] = node.FillColor,
             ["description"] = node.Description ?? string.Empty,
-            ["editUrl"] = Url.Page("/Nodes/Index", null, new { projectId = Model.ProjectId, editId = node.Id }, null),
-            ["duplicateUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Duplicate", projectId = Model.ProjectId }, null),
-            ["deleteUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Delete", projectId = Model.ProjectId }, null)
+            ["editUrl"] = Url.Page("/Nodes/Index", null, new { subProjectId = Model.SubProjectId, editId = node.Id }, null),
+            ["duplicateUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Duplicate", subProjectId = Model.SubProjectId }, null),
+            ["deleteUrl"] = Url.Page("/Nodes/Index", null, new { handler = "Delete", subProjectId = Model.SubProjectId }, null)
         };
     }
 
@@ -70,9 +70,9 @@
 }
 
 <p class="text-muted mb-3">
-    Project: <strong>@Model.CurrentProject?.Name</strong>
+    Project: <strong>@Model.CurrentProject?.Name</strong> / Sub Project: <strong>@Model.CurrentSubProject?.Name</strong>
     <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
-    <a class="ms-2" asp-page="/Projects/Audit" asp-route-projectId="@Model.ProjectId">View audit</a>
+    <a class="ms-2" asp-page="/Projects/Audit" asp-route-projectId="@Model.CurrentProject?.Id">View audit</a>
 </p>
 
 <div class="row g-4">
@@ -80,7 +80,7 @@
         <h2>@(Model.IsEditing ? "Edit Node" : "Define Node")</h2>
         <form method="post" class="card p-3">
             <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
-            <input type="hidden" asp-for="ProjectId" />
+            <input type="hidden" asp-for="SubProjectId" />
             <input type="hidden" asp-for="Input.Id" />
 
             <div class="mb-3">
@@ -128,7 +128,7 @@
                 <button type="submit" class="btn btn-primary">@(Model.IsEditing ? "Save Node" : "Add Node")</button>
                 @if (Model.IsEditing)
                 {
-                    <a class="btn btn-outline-secondary" asp-page="/Nodes/Index" asp-route-projectId="@Model.ProjectId">Cancel</a>
+                    <a class="btn btn-outline-secondary" asp-page="/Nodes/Index" asp-route-subProjectId="@Model.SubProjectId">Cancel</a>
                 }
             </div>
         </form>

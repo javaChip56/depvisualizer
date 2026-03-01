@@ -17,20 +17,21 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
     public NodeInputModel Input { get; set; } = new();
 
     [BindProperty(SupportsGet = true)]
-    public int? ProjectId { get; set; }
+    public int? SubProjectId { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public int? EditId { get; set; }
 
     public IReadOnlyList<Node> Nodes { get; private set; } = [];
     public Project? CurrentProject { get; private set; }
+    public SubProject? CurrentSubProject { get; private set; }
     public IEnumerable<SelectListItem> NodeTypeOptions { get; private set; } = [];
     public IEnumerable<SelectListItem> ParentNodeOptions { get; private set; } = [];
     public bool IsEditing => EditId.HasValue;
 
     public IActionResult OnGet()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
@@ -41,12 +42,12 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
 
     public IActionResult OnPost()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
-        var projectNodes = _repository.GetNodes(ProjectId!.Value);
+        var subProjectNodes = _repository.GetNodes(SubProjectId!.Value);
 
         if (!_nodeTypeCatalog.IsValid(Input.Type))
         {
@@ -54,12 +55,12 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
 
         var normalizedName = Input.Name?.Trim() ?? string.Empty;
-        var duplicateNameExists = projectNodes.Any(n =>
+        var duplicateNameExists = subProjectNodes.Any(n =>
             string.Equals(n.Name, normalizedName, StringComparison.OrdinalIgnoreCase) &&
             n.Id != Input.Id);
         if (duplicateNameExists)
         {
-            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.Name)}", "A node with this name already exists in the project.");
+            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.Name)}", "A node with this name already exists in the sub project.");
         }
 
         if (!Regex.IsMatch(Input.LineColor ?? string.Empty, "^#[0-9a-fA-F]{6}$"))
@@ -80,7 +81,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             }
             else
             {
-                var parentNode = _repository.GetNodeById(ProjectId!.Value, Input.ParentNodeId.Value);
+                var parentNode = _repository.GetNodeById(SubProjectId!.Value, Input.ParentNodeId.Value);
                 if (parentNode is null)
                 {
                     ModelState.AddModelError(nameof(Input.ParentNodeId), "Selected parent node was not found.");
@@ -89,7 +90,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 {
                     ModelState.AddModelError(nameof(Input.ParentNodeId), "Selected parent node must be a compound node type.");
                 }
-                else if (Input.Id > 0 && CreatesParentCycle(Input.Id, Input.ParentNodeId.Value, projectNodes))
+                else if (Input.Id > 0 && CreatesParentCycle(Input.Id, Input.ParentNodeId.Value, subProjectNodes))
                 {
                     ModelState.AddModelError(nameof(Input.ParentNodeId), "Parent assignment creates a cycle.");
                 }
@@ -105,7 +106,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
 
         if (Input.Id > 0)
         {
-            var updated = _repository.UpdateNode(ProjectId!.Value, Input.Id, new Node
+            var updated = _repository.UpdateNode(SubProjectId!.Value, Input.Id, new Node
             {
                 Name = normalizedName,
                 Type = (Input.Type ?? string.Empty).Trim(),
@@ -123,15 +124,15 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             }
 
             _repository.AddAuditEntry(
-                ProjectId.Value,
+                CurrentProject!.Id,
                 User.Identity!.Name!,
                 "Update",
                 "Node",
-                $"Updated node '{normalizedName}'.");
+                $"Updated node '{normalizedName}' in sub project '{CurrentSubProject!.Name}'.");
         }
         else
         {
-            _repository.AddNode(ProjectId!.Value, new Node
+            var created = _repository.AddNode(SubProjectId!.Value, new Node
             {
                 Name = normalizedName,
                 Type = (Input.Type ?? string.Empty).Trim(),
@@ -140,26 +141,32 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
                 FillColor = Input.FillColor ?? "#ffffff",
                 Description = Input.Description
             });
+            if (created is null)
+            {
+                ModelState.AddModelError(string.Empty, "Unable to create node.");
+                LoadData(preservePostedInput: true);
+                return Page();
+            }
 
             _repository.AddAuditEntry(
-                ProjectId.Value,
+                CurrentProject!.Id,
                 User.Identity!.Name!,
                 "Create",
                 "Node",
-                $"Created node '{normalizedName}'.");
+                $"Created node '{normalizedName}' in sub project '{CurrentSubProject!.Name}'.");
         }
 
-        return RedirectToPage(new { projectId = ProjectId });
+        return RedirectToPage(new { subProjectId = SubProjectId });
     }
 
     public IActionResult OnPostDelete(int deleteId)
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
-        var existing = _repository.GetNodeById(ProjectId!.Value, deleteId);
+        var existing = _repository.GetNodeById(SubProjectId!.Value, deleteId);
         if (existing is null)
         {
             ModelState.AddModelError(string.Empty, "Node not found.");
@@ -167,7 +174,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             return Page();
         }
 
-        var deleted = _repository.DeleteNode(ProjectId.Value, deleteId, out var error);
+        var deleted = _repository.DeleteNode(SubProjectId.Value, deleteId, out var error);
         if (!deleted)
         {
             ModelState.AddModelError(string.Empty, error ?? "Unable to delete node.");
@@ -176,23 +183,23 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
 
         _repository.AddAuditEntry(
-            ProjectId.Value,
+            CurrentProject!.Id,
             User.Identity!.Name!,
             "Delete",
             "Node",
-            $"Deleted node '{existing.Name}'.");
+            $"Deleted node '{existing.Name}' from sub project '{CurrentSubProject!.Name}'.");
 
-        return RedirectToPage(new { projectId = ProjectId });
+        return RedirectToPage(new { subProjectId = SubProjectId });
     }
 
     public IActionResult OnPostDuplicate(int sourceId)
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
-        var sourceNode = _repository.GetNodeById(ProjectId!.Value, sourceId);
+        var sourceNode = _repository.GetNodeById(SubProjectId!.Value, sourceId);
         if (sourceNode is null)
         {
             ModelState.AddModelError(string.Empty, "Node not found for duplication.");
@@ -200,9 +207,9 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             return Page();
         }
 
-        var projectNodes = _repository.GetNodes(ProjectId.Value);
-        var duplicateName = BuildDuplicateName(sourceNode.Name, projectNodes);
-        _repository.AddNode(ProjectId.Value, new Node
+        var subProjectNodes = _repository.GetNodes(SubProjectId.Value);
+        var duplicateName = BuildDuplicateName(sourceNode.Name, subProjectNodes);
+        var created = _repository.AddNode(SubProjectId.Value, new Node
         {
             Name = duplicateName,
             Type = sourceNode.Type,
@@ -211,20 +218,26 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
             FillColor = sourceNode.FillColor,
             Description = sourceNode.Description
         });
+        if (created is null)
+        {
+            ModelState.AddModelError(string.Empty, "Unable to duplicate node.");
+            LoadData();
+            return Page();
+        }
 
         _repository.AddAuditEntry(
-            ProjectId.Value,
+            CurrentProject!.Id,
             User.Identity!.Name!,
             "Duplicate",
             "Node",
-            $"Duplicated node '{sourceNode.Name}' as '{duplicateName}'.");
+            $"Duplicated node '{sourceNode.Name}' as '{duplicateName}' in sub project '{CurrentSubProject!.Name}'.");
 
-        return RedirectToPage(new { projectId = ProjectId });
+        return RedirectToPage(new { subProjectId = SubProjectId });
     }
 
     private void LoadData(bool preservePostedInput = false)
     {
-        Nodes = _repository.GetNodes(ProjectId!.Value);
+        Nodes = _repository.GetNodes(SubProjectId!.Value);
         NodeTypeOptions = _nodeTypeCatalog
             .GetNodeTypes()
             .Select(t => new SelectListItem(t, t));
@@ -237,7 +250,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
 
         if (EditId.HasValue && !preservePostedInput)
         {
-            var editNode = _repository.GetNodeById(ProjectId!.Value, EditId.Value);
+            var editNode = _repository.GetNodeById(SubProjectId!.Value, EditId.Value);
             if (editNode is null)
             {
                 EditId = null;
@@ -257,11 +270,11 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
     }
 
-    private bool TryLoadProjectAndAuthorize(out IActionResult? redirect)
+    private bool TryLoadSubProjectAndAuthorize(out IActionResult? redirect)
     {
         redirect = null;
 
-        if (!ProjectId.HasValue)
+        if (!SubProjectId.HasValue)
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
@@ -275,13 +288,20 @@ public sealed class IndexModel(DependencyRepository repository, NodeTypeCatalog 
         }
 
         var isAdmin = User.IsInRole("Admin");
-        if (!_repository.UserCanAccessProject(ProjectId.Value, username, isAdmin))
+        if (!_repository.UserCanAccessSubProject(SubProjectId.Value, username, isAdmin))
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
         }
 
-        CurrentProject = _repository.GetProjectById(ProjectId.Value);
+        CurrentSubProject = _repository.GetSubProjectById(SubProjectId.Value);
+        if (CurrentSubProject is null)
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        CurrentProject = _repository.GetProjectById(CurrentSubProject.ProjectId);
         if (CurrentProject is null)
         {
             redirect = RedirectToPage("/Projects/Index");

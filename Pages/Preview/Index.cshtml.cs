@@ -13,24 +13,25 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
     private readonly NodeShapeResolver _nodeShapeResolver = nodeShapeResolver;
 
     [BindProperty(SupportsGet = true)]
-    public int? ProjectId { get; set; }
+    public int? SubProjectId { get; set; }
 
     public Project? CurrentProject { get; private set; }
+    public SubProject? CurrentSubProject { get; private set; }
     public bool IsMaintainer { get; private set; }
     public string CytoscapeElementsJson { get; private set; } = "[]";
 
     public IActionResult OnGet()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
-        var nodes = _repository.GetNodes(ProjectId!.Value);
-        var relationships = _repository.GetRelationships(ProjectId!.Value);
+        var nodes = _repository.GetNodes(SubProjectId!.Value);
+        var relationships = _repository.GetRelationships(SubProjectId!.Value);
         var nodeIds = nodes.Select(n => $"n{n.Id}").ToList();
         var savedPositions = _repository.GetLayoutPositions(
-            ProjectId.Value,
+            SubProjectId.Value,
             User.Identity!.Name!,
             User.IsInRole("Admin"),
             nodeIds);
@@ -58,11 +59,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
 
             if (savedPositions.TryGetValue(nodeId, out var savedPosition))
             {
-                elements.Add(new
-                {
-                    data,
-                    position = new { x = savedPosition.X, y = savedPosition.Y }
-                });
+                elements.Add(new { data, position = new { x = savedPosition.X, y = savedPosition.Y } });
             }
             else
             {
@@ -90,7 +87,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
 
     public async Task<IActionResult> OnPostSaveLayoutAsync()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
@@ -100,7 +97,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
         var validNodeIds = _repository
-            .GetNodes(ProjectId!.Value)
+            .GetNodes(SubProjectId!.Value)
             .Select(n => $"n{n.Id}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -112,7 +109,7 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
 
         var saved = _repository.SaveLayoutPositions(
-            ProjectId.Value,
+            SubProjectId.Value,
             User.Identity!.Name!,
             User.IsInRole("Admin"),
             filtered,
@@ -127,13 +124,13 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
 
     public IActionResult OnPostResetLayout()
     {
-        if (!TryLoadProjectAndAuthorize(out var redirect))
+        if (!TryLoadSubProjectAndAuthorize(out var redirect))
         {
             return redirect!;
         }
 
         var reset = _repository.ResetContributorLayout(
-            ProjectId!.Value,
+            SubProjectId!.Value,
             User.Identity!.Name!,
             User.IsInRole("Admin"),
             out var error);
@@ -145,11 +142,11 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         return new JsonResult(new { success = true });
     }
 
-    private bool TryLoadProjectAndAuthorize(out IActionResult? redirect)
+    private bool TryLoadSubProjectAndAuthorize(out IActionResult? redirect)
     {
         redirect = null;
 
-        if (!ProjectId.HasValue)
+        if (!SubProjectId.HasValue)
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
@@ -163,15 +160,22 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         }
 
         var isAdmin = User.IsInRole("Admin");
-        if (!_repository.UserCanAccessProject(ProjectId.Value, username, isAdmin))
+        if (!_repository.UserCanAccessSubProject(SubProjectId.Value, username, isAdmin))
         {
             redirect = RedirectToPage("/Projects/Index");
             return false;
         }
 
-        IsMaintainer = _repository.UserCanManageProject(ProjectId.Value, username, isAdmin);
+        IsMaintainer = _repository.UserCanManageSubProject(SubProjectId.Value, username, isAdmin);
 
-        CurrentProject = _repository.GetProjectById(ProjectId.Value);
+        CurrentSubProject = _repository.GetSubProjectById(SubProjectId.Value);
+        if (CurrentSubProject is null)
+        {
+            redirect = RedirectToPage("/Projects/Index");
+            return false;
+        }
+
+        CurrentProject = _repository.GetProjectById(CurrentSubProject.ProjectId);
         if (CurrentProject is null)
         {
             redirect = RedirectToPage("/Projects/Index");

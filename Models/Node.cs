@@ -6,6 +6,7 @@ public sealed class Node
 {
     public int Id { get; init; }
     public int ProjectId { get; init; }
+    public int SubProjectId { get; init; }
     public int? ParentNodeId { get; set; }
 
     [Required]

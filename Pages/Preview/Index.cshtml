@@ -5,7 +5,7 @@
 }
 
 <p class="text-muted mb-3">
-    Project: <strong>@Model.CurrentProject?.Name</strong>
+    Project: <strong>@Model.CurrentProject?.Name</strong> / Sub Project: <strong>@Model.CurrentSubProject?.Name</strong>
     <a class="ms-2" asp-page="/Projects/Index">Switch project</a>
 </p>
 
@@ -74,7 +74,7 @@
                 positions[node.id()] = { x: p.x, y: p.y };
             });
 
-            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "SaveLayout", new { projectId = Model.ProjectId }))', {
+            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "SaveLayout", new { subProjectId = Model.SubProjectId }))', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -228,7 +228,7 @@
                 return;
             }
 
-            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "ResetLayout", new { projectId = Model.ProjectId }))', {
+            const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "ResetLayout", new { subProjectId = Model.SubProjectId }))', {
                 method: 'POST'
             });
             if (!response.ok) {
