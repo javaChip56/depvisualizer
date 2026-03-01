@@ -18,6 +18,9 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - `AuthDefaults:AdminPassword`
 - Admin can create users with a default password
 - New users are forced to change password on first login
+- Admin can suspend/unsuspend users from `Admin -> Manage Users`
+- Suspended users cannot login, and active sessions are invalidated by middleware
+- Safety guard: app prevents suspending the last active admin
 
 ### Admin Features
 - Manage users:
@@ -42,6 +45,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
   - edit project details
   - delete project
   - add/update members and assign role
+  - remove members from project
 - Contributor can:
   - access member projects
   - manage nodes and relationships
@@ -67,6 +71,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
 - Duplicate node action in list:
   - creates `Name (Copy)`, `Name (Copy 2)`, etc.
 - Delete actions require user confirmation
+- Existing Nodes list uses Tabulator tree table to display nested parent/child structure
 
 ### Relationships
 - Create/edit/delete relationships under selected project
@@ -78,6 +83,7 @@ ASP.NET Core Razor Pages app for modeling architecture dependencies by project, 
 ### Preview
 - Interactive Cytoscape graph preview per project
 - Compound hierarchy rendering via parent-child nodes
+- Relationship lines use `taxi` routing (bendy/orthogonal style)
 - Node visuals include:
   - shape (from node type)
   - line color and fill color (from node)
@@ -154,6 +160,7 @@ Default dev URLs (from launch settings):
 - Tracked events currently include:
   - node create/update/duplicate/delete
   - relationship create/update/delete
+  - project member add/update/remove
 - Each entry captures:
   - timestamp (UTC)
   - user
@@ -165,5 +172,6 @@ Default dev URLs (from launch settings):
 - Cytoscape.js
 - cytoscape-svg plugin
 - Tom Select
+- Tabulator (tree table for nested nodes list)
 
 If CDN access is blocked in your environment, preview/export or enhanced dropdown UX may be limited until these assets are served locally.
