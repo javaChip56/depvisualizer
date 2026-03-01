@@ -14,6 +14,8 @@ public sealed class DependencyRepository
     private readonly Dictionary<int, List<ProjectAuditEntry>> _auditEntriesByProjectId = [];
     private readonly Dictionary<int, Dictionary<string, NodeLayoutPosition>> _maintainerLayoutBySubProjectId = [];
     private readonly Dictionary<int, Dictionary<string, Dictionary<string, NodeLayoutPosition>>> _contributorLayoutBySubProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, EdgeLayoutAdjustment>> _maintainerEdgeLayoutBySubProjectId = [];
+    private readonly Dictionary<int, Dictionary<string, Dictionary<string, EdgeLayoutAdjustment>>> _contributorEdgeLayoutBySubProjectId = [];
     private int _nextProjectId = 1;
     private int _nextSubProjectId = 1;
     private int _nextNodeId = 1;
@@ -289,6 +291,8 @@ public sealed class DependencyRepository
                 _subProjectMembersBySubProjectId.Remove(subProjectId);
                 _maintainerLayoutBySubProjectId.Remove(subProjectId);
                 _contributorLayoutBySubProjectId.Remove(subProjectId);
+                _maintainerEdgeLayoutBySubProjectId.Remove(subProjectId);
+                _contributorEdgeLayoutBySubProjectId.Remove(subProjectId);
             }
 
             _nodes.RemoveAll(n => n.ProjectId == projectId);
@@ -505,6 +509,8 @@ public sealed class DependencyRepository
             _relationships.RemoveAll(r => r.SubProjectId == subProjectId);
             _maintainerLayoutBySubProjectId.Remove(subProjectId);
             _contributorLayoutBySubProjectId.Remove(subProjectId);
+            _maintainerEdgeLayoutBySubProjectId.Remove(subProjectId);
+            _contributorEdgeLayoutBySubProjectId.Remove(subProjectId);
             return true;
         }
     }
@@ -745,10 +751,25 @@ public sealed class DependencyRepository
         }
     }
 
-    public bool AddRelationship(int subProjectId, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
+    public bool AddRelationship(
+        int subProjectId,
+        int selectedNodeId,
+        int relatedNodeId,
+        bool selectedDependsOnRelated,
+        string label,
+        RelationshipArrowDirection arrowDirection,
+        RelationshipLineStyle lineStyle,
+        out string? error)
     {
         lock (_syncRoot)
         {
+            var normalizedLabel = NormalizeRelationshipLabel(label);
+            if (normalizedLabel is null)
+            {
+                error = "Relationship label is required and must be 50 characters or fewer.";
+                return false;
+            }
+
             var ok = TryResolveRelationship(subProjectId, selectedNodeId, relatedNodeId, selectedDependsOnRelated, null, out var sourceId, out var targetId, out var projectId, out error);
             if (!ok)
             {
@@ -761,17 +782,36 @@ public sealed class DependencyRepository
                 ProjectId = projectId,
                 SubProjectId = subProjectId,
                 SourceNodeId = sourceId,
-                TargetNodeId = targetId
+                TargetNodeId = targetId,
+                Label = normalizedLabel,
+                ArrowDirection = arrowDirection,
+                LineStyle = lineStyle
             });
 
             return true;
         }
     }
 
-    public bool UpdateRelationship(int subProjectId, int id, int selectedNodeId, int relatedNodeId, bool selectedDependsOnRelated, out string? error)
+    public bool UpdateRelationship(
+        int subProjectId,
+        int id,
+        int selectedNodeId,
+        int relatedNodeId,
+        bool selectedDependsOnRelated,
+        string label,
+        RelationshipArrowDirection arrowDirection,
+        RelationshipLineStyle lineStyle,
+        out string? error)
     {
         lock (_syncRoot)
         {
+            var normalizedLabel = NormalizeRelationshipLabel(label);
+            if (normalizedLabel is null)
+            {
+                error = "Relationship label is required and must be 50 characters or fewer.";
+                return false;
+            }
+
             var existingIndex = _relationships.FindIndex(r => r.SubProjectId == subProjectId && r.Id == id);
             if (existingIndex < 0)
             {
@@ -791,10 +831,24 @@ public sealed class DependencyRepository
                 ProjectId = projectId,
                 SubProjectId = subProjectId,
                 SourceNodeId = sourceId,
-                TargetNodeId = targetId
+                TargetNodeId = targetId,
+                Label = normalizedLabel,
+                ArrowDirection = arrowDirection,
+                LineStyle = lineStyle
             };
             return true;
         }
+    }
+
+    private static string? NormalizeRelationshipLabel(string? label)
+    {
+        var normalized = label?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 50)
+        {
+            return null;
+        }
+
+        return normalized;
     }
 
     public bool DeleteRelationship(int subProjectId, int id, out string? error)
@@ -883,6 +937,78 @@ public sealed class DependencyRepository
         }
     }
 
+    public IReadOnlyDictionary<string, EdgeLayoutAdjustment> GetEdgeLayoutAdjustments(int subProjectId, string username, bool isAdmin, IEnumerable<string> edgeIds)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            var role = GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
+            if (role == ProjectMemberRole.None)
+            {
+                return new Dictionary<string, EdgeLayoutAdjustment>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            Dictionary<string, EdgeLayoutAdjustment>? adjustmentsByEdgeId = null;
+            if (role == ProjectMemberRole.Maintainer)
+            {
+                _maintainerEdgeLayoutBySubProjectId.TryGetValue(subProjectId, out adjustmentsByEdgeId);
+            }
+            else
+            {
+                if (_contributorEdgeLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorLayouts) &&
+                    contributorLayouts.TryGetValue(normalizedUsername, out var contributorAdjustments))
+                {
+                    adjustmentsByEdgeId = contributorAdjustments;
+                }
+                else
+                {
+                    _maintainerEdgeLayoutBySubProjectId.TryGetValue(subProjectId, out adjustmentsByEdgeId);
+                }
+            }
+
+            if (adjustmentsByEdgeId is null)
+            {
+                return new Dictionary<string, EdgeLayoutAdjustment>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var ids = edgeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return adjustmentsByEdgeId
+                .Where(p => ids.Contains(p.Key))
+                .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    public bool SaveEdgeLayoutAdjustments(int subProjectId, string username, bool isAdmin, IDictionary<string, EdgeLayoutAdjustment> adjustments, out string? error)
+    {
+        error = null;
+        var normalizedUsername = NormalizeUsername(username);
+        lock (_syncRoot)
+        {
+            var role = GetSubProjectRoleUnsafe(subProjectId, normalizedUsername, isAdmin);
+            if (role == ProjectMemberRole.None)
+            {
+                error = "Access denied.";
+                return false;
+            }
+
+            var cloned = new Dictionary<string, EdgeLayoutAdjustment>(adjustments, StringComparer.OrdinalIgnoreCase);
+            if (role == ProjectMemberRole.Maintainer)
+            {
+                _maintainerEdgeLayoutBySubProjectId[subProjectId] = cloned;
+                return true;
+            }
+
+            if (!_contributorEdgeLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorLayouts))
+            {
+                contributorLayouts = new Dictionary<string, Dictionary<string, EdgeLayoutAdjustment>>(StringComparer.OrdinalIgnoreCase);
+                _contributorEdgeLayoutBySubProjectId[subProjectId] = contributorLayouts;
+            }
+
+            contributorLayouts[normalizedUsername] = cloned;
+            return true;
+        }
+    }
+
     public bool ResetContributorLayout(int subProjectId, string username, bool isAdmin, out string? error)
     {
         error = null;
@@ -908,6 +1034,15 @@ public sealed class DependencyRepository
                 if (contributorLayouts.Count == 0)
                 {
                     _contributorLayoutBySubProjectId.Remove(subProjectId);
+                }
+            }
+
+            if (_contributorEdgeLayoutBySubProjectId.TryGetValue(subProjectId, out var contributorEdgeLayouts))
+            {
+                contributorEdgeLayouts.Remove(normalizedUsername);
+                if (contributorEdgeLayouts.Count == 0)
+                {
+                    _contributorEdgeLayoutBySubProjectId.Remove(subProjectId);
                 }
             }
 

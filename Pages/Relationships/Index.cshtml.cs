@@ -54,11 +54,45 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             return Page();
         }
 
-        var selectedDependsOnRelated = Input.RelationshipType == RelationshipType.DependsOn;
+        var selectedDependsOnRelated = true;
+        if (!Enum.IsDefined(Input.ArrowDirection))
+        {
+            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.ArrowDirection)}", "Select a valid arrow direction.");
+        }
+
+        if (!Enum.IsDefined(Input.LineStyle))
+        {
+            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.LineStyle)}", "Select a valid line style.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            EditId = Input.Id > 0 ? Input.Id : null;
+            LoadData(preservePostedInput: true);
+            return Page();
+        }
+
         string? error;
         var ok = Input.Id > 0
-            ? _repository.UpdateRelationship(SubProjectId!.Value, Input.Id, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error)
-            : _repository.AddRelationship(SubProjectId!.Value, Input.SelectedNodeId, Input.RelatedNodeId, selectedDependsOnRelated, out error);
+            ? _repository.UpdateRelationship(
+                SubProjectId!.Value,
+                Input.Id,
+                Input.SelectedNodeId,
+                Input.RelatedNodeId,
+                selectedDependsOnRelated,
+                Input.Label,
+                Input.ArrowDirection,
+                Input.LineStyle,
+                out error)
+            : _repository.AddRelationship(
+                SubProjectId!.Value,
+                Input.SelectedNodeId,
+                Input.RelatedNodeId,
+                selectedDependsOnRelated,
+                Input.Label,
+                Input.ArrowDirection,
+                Input.LineStyle,
+                out error);
         if (!ok)
         {
             ModelState.AddModelError(string.Empty, error ?? "Unable to save relationship.");
@@ -76,7 +110,7 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             User.Identity!.Name!,
             Input.Id > 0 ? "Update" : "Create",
             "Relationship",
-            $"{selectedName} {(selectedDependsOnRelated ? "depends on" : "is dependency of")} {relatedName} in sub project '{CurrentSubProject!.Name}'.");
+            $"{selectedName} {Input.Label} {relatedName} in sub project '{CurrentSubProject!.Name}'.");
 
         return RedirectToPage(new { subProjectId = SubProjectId });
     }
@@ -112,7 +146,7 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
             User.Identity!.Name!,
             "Delete",
             "Relationship",
-            $"Deleted relationship {source} depends on {target} from sub project '{CurrentSubProject!.Name}'.");
+            $"Deleted relationship {source} {existing.Label} {target} from sub project '{CurrentSubProject!.Name}'.");
 
         return RedirectToPage(new { subProjectId = SubProjectId });
     }
@@ -136,7 +170,9 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
                 Id = relationship.Id,
                 SelectedNodeId = relationship.SourceNodeId,
                 RelatedNodeId = relationship.TargetNodeId,
-                RelationshipType = RelationshipType.DependsOn
+                Label = relationship.Label,
+                ArrowDirection = relationship.ArrowDirection,
+                LineStyle = relationship.LineStyle
             };
         }
     }
@@ -191,12 +227,12 @@ public sealed class IndexModel(DependencyRepository repository) : PageModel
 
         [Range(1, int.MaxValue)]
         public int RelatedNodeId { get; set; }
-        public RelationshipType RelationshipType { get; set; } = RelationshipType.DependsOn;
-    }
 
-    public enum RelationshipType
-    {
-        DependsOn,
-        DependencyOf
+        [Required]
+        [StringLength(50)]
+        public string Label { get; set; } = "depends on";
+
+        public RelationshipArrowDirection ArrowDirection { get; set; } = RelationshipArrowDirection.Down;
+        public RelationshipLineStyle LineStyle { get; set; } = RelationshipLineStyle.Solid;
     }
 }

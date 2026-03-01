@@ -26,8 +26,43 @@
         ? "Layout changes are shared with all project members."
         : "Layout changes are personal to your account. Use Reset Layout to revert to the maintainer layout.")
 </p>
+<p class="text-muted small mb-2">
+    Edge editing: click an edge, then drag the blue dot to reposition the label.
+</p>
 
 <div id="cy" class="graph-surface"></div>
+<style>
+    #cy {
+        position: relative;
+    }
+
+    .edge-edit-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+
+    .edge-edit-handle {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+        pointer-events: auto;
+        cursor: grab;
+        transform: translate(-50%, -50%);
+        display: none;
+    }
+
+    .edge-edit-handle:active {
+        cursor: grabbing;
+    }
+
+    .edge-edit-handle.label {
+        background: #0d6efd;
+    }
+</style>
 
 @section Scripts {
     <script src="https://unpkg.com/cytoscape@3.29.2/dist/cytoscape.min.js"></script>
@@ -68,10 +103,19 @@
         }
 
         async function savePositions(cy) {
-            const positions = {};
+            const nodes = {};
             cy.nodes().forEach(node => {
                 const p = node.position();
-                positions[node.id()] = { x: p.x, y: p.y };
+                nodes[node.id()] = { x: p.x, y: p.y };
+            });
+
+            const edges = {};
+            cy.edges().forEach(edge => {
+                const data = edge.data();
+                edges[edge.id()] = {
+                    labelOffsetX: Number.isFinite(data.labelOffsetX) ? data.labelOffsetX : 0,
+                    labelOffsetY: Number.isFinite(data.labelOffsetY) ? data.labelOffsetY : 0
+                };
             });
 
             const response = await fetch('@Html.Raw(Url.Page("/Preview/Index", "SaveLayout", new { subProjectId = Model.SubProjectId }))', {
@@ -79,7 +123,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(positions)
+                body: JSON.stringify({ nodes, edges })
             });
 
             if (!response.ok) {
@@ -177,8 +221,13 @@
                         'curve-style': 'taxi',
                         'taxi-direction': 'auto',
                         'taxi-turn': 30,
-                        'target-arrow-shape': 'triangle',
+                        'source-arrow-shape': 'data(sourceArrowShape)',
+                        'target-arrow-shape': 'data(targetArrowShape)',
+                        'line-style': 'data(lineStyle)',
+                        'text-margin-x': 'data(labelOffsetX)',
+                        'text-margin-y': 'data(labelOffsetY)',
                         'line-color': '#6c757d',
+                        'source-arrow-color': '#6c757d',
                         'target-arrow-color': '#6c757d',
                         'width': 1,
                         'label': 'data(label)',
@@ -187,6 +236,15 @@
                         'text-background-opacity': 1,
                         'text-background-padding': '2px'
                     }
+                },
+                {
+                    selector: 'edge.edge-selected',
+                    style: {
+                        'width': 2,
+                        'line-color': '#0d6efd',
+                        'source-arrow-color': '#0d6efd',
+                        'target-arrow-color': '#0d6efd'
+                    }
                 }
             ],
             layout: layoutConfig
@@ -194,6 +252,155 @@
 
         cy.on('dragfree', 'node', () => queueSave(cy));
         cy.on('layoutstop', () => queueSave(cy));
+
+        const overlay = document.createElement('div');
+        overlay.className = 'edge-edit-overlay';
+        const labelHandle = document.createElement('div');
+        labelHandle.className = 'edge-edit-handle label';
+        labelHandle.title = 'Drag label';
+        overlay.appendChild(labelHandle);
+        document.getElementById('cy')?.appendChild(overlay);
+
+        const hideEdgeHandles = () => {
+            labelHandle.style.display = 'none';
+        };
+
+        const setHandlePosition = (handle, x, y) => {
+            handle.style.left = `${x}px`;
+            handle.style.top = `${y}px`;
+            handle.style.display = 'block';
+        };
+
+        const updateEdgeHandles = () => {
+            if (!selectedEdge || selectedEdge.removed()) {
+                hideEdgeHandles();
+                return;
+            }
+
+            let midpoint = null;
+            if (typeof selectedEdge.renderedMidpoint === 'function') {
+                midpoint = selectedEdge.renderedMidpoint();
+            } else if (typeof selectedEdge.midpoint === 'function') {
+                const point = selectedEdge.midpoint();
+                const zoom = cy.zoom();
+                const pan = cy.pan();
+                midpoint = { x: (point.x * zoom) + pan.x, y: (point.y * zoom) + pan.y };
+            }
+
+            if (!midpoint) {
+                hideEdgeHandles();
+                return;
+            }
+
+            const data = selectedEdge.data();
+            const labelOffsetX = Number.isFinite(data.labelOffsetX) ? data.labelOffsetX : 0;
+            const labelOffsetY = Number.isFinite(data.labelOffsetY) ? data.labelOffsetY : 0;
+
+            setHandlePosition(labelHandle, midpoint.x + labelOffsetX, midpoint.y + labelOffsetY);
+        };
+
+        let selectedEdge = null;
+        const updateEdgeSelection = (edge) => {
+            if (selectedEdge && selectedEdge.id() === edge?.id()) {
+                return;
+            }
+
+            if (selectedEdge) {
+                selectedEdge.removeClass('edge-selected');
+            }
+
+            selectedEdge = edge || null;
+            if (selectedEdge) {
+                selectedEdge.addClass('edge-selected');
+            }
+
+            updateEdgeHandles();
+        };
+
+        cy.on('tap', 'edge', (event) => {
+            updateEdgeSelection(event.target);
+        });
+
+        cy.on('tap', (event) => {
+            if (event.target === cy) {
+                updateEdgeSelection(null);
+            }
+        });
+
+        let dragState = null;
+        const pointerToRendered = (event) => {
+            const rect = cy.container().getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        };
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const beginHandleDrag = (kind, event) => {
+            if (!selectedEdge) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const data = selectedEdge.data();
+            dragState = {
+                edgeId: selectedEdge.id(),
+                labelOffsetX: Number.isFinite(data.labelOffsetX) ? data.labelOffsetX : 0,
+                labelOffsetY: Number.isFinite(data.labelOffsetY) ? data.labelOffsetY : 0
+            };
+
+            cy.userPanningEnabled(false);
+        };
+
+        labelHandle.addEventListener('mousedown', (event) => beginHandleDrag('label', event));
+
+        document.addEventListener('mousemove', (event) => {
+            if (!dragState || !selectedEdge) {
+                return;
+            }
+
+            if (selectedEdge.id() !== dragState.edgeId) {
+                dragState = null;
+                cy.userPanningEnabled(true);
+                return;
+            }
+
+            const pointer = pointerToRendered(event);
+            let midpoint = null;
+            if (typeof selectedEdge.renderedMidpoint === 'function') {
+                midpoint = selectedEdge.renderedMidpoint();
+            } else if (typeof selectedEdge.midpoint === 'function') {
+                const point = selectedEdge.midpoint();
+                const zoom = cy.zoom();
+                const pan = cy.pan();
+                midpoint = { x: (point.x * zoom) + pan.x, y: (point.y * zoom) + pan.y };
+            }
+
+            if (!midpoint) {
+                return;
+            }
+
+            selectedEdge.data({
+                labelOffsetX: clamp(pointer.x - midpoint.x, -300, 300),
+                labelOffsetY: clamp(pointer.y - midpoint.y, -300, 300)
+            });
+
+            updateEdgeHandles();
+            queueSave(cy);
+        });
+
+        document.addEventListener('mouseup', () => {
+            dragState = null;
+            cy.userPanningEnabled(true);
+        });
+
+        cy.on('render pan zoom resize', () => updateEdgeHandles());
+        cy.on('position', 'node', () => updateEdgeHandles());
+        cy.on('data', 'edge', () => updateEdgeHandles());
 
         document.getElementById('btnRecenter')?.addEventListener('click', () => {
             cy.fit(undefined, 30);

@@ -4,6 +4,15 @@
     ViewData["Title"] = "Relationships";
     var nodeLookup = Model.Nodes.ToDictionary(n => n.Id, n => n);
 }
+<style>
+    .relationship-icon-choice {
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1;
+        padding-top: 0.55rem;
+        padding-bottom: 0.55rem;
+    }
+</style>
 
 <p class="text-muted mb-3">
     Project: <strong>@Model.CurrentProject?.Name</strong> / Sub Project: <strong>@Model.CurrentSubProject?.Name</strong>
@@ -31,12 +40,42 @@
                     <select asp-for="Input.SelectedNodeId" class="form-select" asp-items="Model.NodeOptions"></select>
                 </div>
 
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="Input.ArrowDirection" class="form-label">Arrow Direction</label>
+                        <div class="btn-group w-100" role="group" aria-label="Arrow direction">
+                            <input type="radio" class="btn-check" asp-for="Input.ArrowDirection" id="arrow-down" value="Down" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="arrow-down" title="Down" aria-label="Down">↓</label>
+
+                            <input type="radio" class="btn-check" asp-for="Input.ArrowDirection" id="arrow-up" value="Up" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="arrow-up" title="Up" aria-label="Up">↑</label>
+
+                            <input type="radio" class="btn-check" asp-for="Input.ArrowDirection" id="arrow-both" value="Both" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="arrow-both" title="Up/Down" aria-label="Up/Down">↕</label>
+                        </div>
+                        <span asp-validation-for="Input.ArrowDirection" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Input.LineStyle" class="form-label">Line Type</label>
+                        <div class="btn-group w-100" role="group" aria-label="Line type">
+                            <input type="radio" class="btn-check" asp-for="Input.LineStyle" id="line-solid" value="Solid" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="line-solid" title="Solid" aria-label="Solid">━</label>
+
+                            <input type="radio" class="btn-check" asp-for="Input.LineStyle" id="line-dotted" value="Dotted" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="line-dotted" title="Dotted" aria-label="Dotted">┈</label>
+
+                            <input type="radio" class="btn-check" asp-for="Input.LineStyle" id="line-dashed" value="Dashed" />
+                            <label class="btn btn-outline-secondary relationship-icon-choice" for="line-dashed" title="Dashed" aria-label="Dashed">╌</label>
+                        </div>
+                        <span asp-validation-for="Input.LineStyle" class="text-danger"></span>
+                    </div>
+                </div>
+
                 <div class="mb-3">
-                    <label asp-for="Input.RelationshipType" class="form-label">Relationship</label>
-                    <select asp-for="Input.RelationshipType" class="form-select">
-                        <option value="DependsOn">depends on</option>
-                        <option value="DependencyOf">dependency of</option>
-                    </select>
+                    <label asp-for="Input.Label" class="form-label">Relationship Label</label>
+                    <input asp-for="Input.Label" class="form-control" maxlength="50" />
+                    <span asp-validation-for="Input.Label" class="text-danger"></span>
                 </div>
 
                 <div class="mb-3">
@@ -69,6 +108,8 @@
                         <th>Source</th>
                         <th>Relationship</th>
                         <th>Target</th>
+                        <th>Arrow</th>
+                        <th>Line</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -81,6 +122,8 @@
                         <td>@source.Name (@source.Type)</td>
                         <td>@relationship.Label</td>
                         <td>@target.Name (@target.Type)</td>
+                        <td>@(relationship.ArrowDirection == dependencies_visualizer.Models.RelationshipArrowDirection.Both ? "Up/Down" : relationship.ArrowDirection.ToString())</td>
+                        <td>@relationship.LineStyle</td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" asp-page="/Relationships/Index" asp-route-subProjectId="@Model.SubProjectId" asp-route-editId="@relationship.Id" title="Edit" aria-label="Edit">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-9.5 9.5L3 14l.646-2.646 9.5-9.5zM11.207 2 4 9.207V10h.793L12 2.793 11.207 2z"/></svg>

@@ -30,11 +30,17 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
         var nodes = _repository.GetNodes(SubProjectId!.Value);
         var relationships = _repository.GetRelationships(SubProjectId!.Value);
         var nodeIds = nodes.Select(n => $"n{n.Id}").ToList();
+        var edgeIds = relationships.Select(r => $"e{r.Id}").ToList();
         var savedPositions = _repository.GetLayoutPositions(
             SubProjectId.Value,
             User.Identity!.Name!,
             User.IsInRole("Admin"),
             nodeIds);
+        var savedEdgeAdjustments = _repository.GetEdgeLayoutAdjustments(
+            SubProjectId.Value,
+            User.Identity!.Name!,
+            User.IsInRole("Admin"),
+            edgeIds);
         var validParentLookup = BuildValidParentLookup(nodes);
 
         var elements = new List<object>();
@@ -69,14 +75,38 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
 
         foreach (var relationship in relationships)
         {
+            var (sourceArrowShape, targetArrowShape) = relationship.ArrowDirection switch
+            {
+                RelationshipArrowDirection.Up => ("triangle", "none"),
+                RelationshipArrowDirection.Both => ("triangle", "triangle"),
+                _ => ("none", "triangle")
+            };
+
+            var lineStyle = relationship.LineStyle switch
+            {
+                RelationshipLineStyle.Dotted => "dotted",
+                RelationshipLineStyle.Dashed => "dashed",
+                _ => "solid"
+            };
+
+            var edgeId = $"e{relationship.Id}";
+            var edgeLayout = savedEdgeAdjustments.TryGetValue(edgeId, out var savedEdgeLayout)
+                ? savedEdgeLayout
+                : new EdgeLayoutAdjustment();
+
             elements.Add(new
             {
                 data = new Dictionary<string, object>
                 {
-                    ["id"] = $"e{relationship.Id}",
+                    ["id"] = edgeId,
                     ["source"] = $"n{relationship.SourceNodeId}",
                     ["target"] = $"n{relationship.TargetNodeId}",
-                    ["label"] = relationship.Label
+                    ["label"] = relationship.Label,
+                    ["sourceArrowShape"] = sourceArrowShape,
+                    ["targetArrowShape"] = targetArrowShape,
+                    ["lineStyle"] = lineStyle,
+                    ["labelOffsetX"] = edgeLayout.LabelOffsetX,
+                    ["labelOffsetY"] = edgeLayout.LabelOffsetY
                 }
             });
         }
@@ -92,34 +122,71 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
             return redirect!;
         }
 
-        var postedPositions = await JsonSerializer.DeserializeAsync<Dictionary<string, NodeLayoutPosition>>(
+        var payload = await JsonSerializer.DeserializeAsync<LayoutSavePayload>(
             Request.Body,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (payload is null)
+        {
+            return new JsonResult(new { success = false, error = "Invalid layout payload." });
+        }
 
         var validNodeIds = _repository
             .GetNodes(SubProjectId!.Value)
             .Select(n => $"n{n.Id}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var validEdgeIds = _repository
+            .GetRelationships(SubProjectId.Value)
+            .Select(r => $"e{r.Id}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var filtered = postedPositions
+        var filteredNodePositions = (payload.Nodes ?? new Dictionary<string, NodeLayoutPosition>(StringComparer.OrdinalIgnoreCase))
             .Where(p =>
                 validNodeIds.Contains(p.Key) &&
                 double.IsFinite(p.Value.X) &&
                 double.IsFinite(p.Value.Y))
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        var filteredEdgeAdjustments = (payload.Edges ?? new Dictionary<string, EdgeLayoutAdjustment>(StringComparer.OrdinalIgnoreCase))
+            .Where(p =>
+                validEdgeIds.Contains(p.Key) &&
+                double.IsFinite(p.Value.LabelOffsetX) &&
+                double.IsFinite(p.Value.LabelOffsetY))
+            .ToDictionary(
+                p => p.Key,
+                p => new EdgeLayoutAdjustment
+                {
+                    LabelOffsetX = p.Value.LabelOffsetX,
+                    LabelOffsetY = p.Value.LabelOffsetY
+                },
+                StringComparer.OrdinalIgnoreCase);
 
-        var saved = _repository.SaveLayoutPositions(
+        var savedNodes = _repository.SaveLayoutPositions(
             SubProjectId.Value,
             User.Identity!.Name!,
             User.IsInRole("Admin"),
-            filtered,
+            filteredNodePositions,
             out var saveError);
-        if (!saved)
+        if (!savedNodes)
         {
             return new JsonResult(new { success = false, error = saveError ?? "Unable to save layout." });
         }
 
-        return new JsonResult(new { success = true, saved = filtered.Count });
+        var savedEdges = _repository.SaveEdgeLayoutAdjustments(
+            SubProjectId.Value,
+            User.Identity!.Name!,
+            User.IsInRole("Admin"),
+            filteredEdgeAdjustments,
+            out var edgeSaveError);
+        if (!savedEdges)
+        {
+            return new JsonResult(new { success = false, error = edgeSaveError ?? "Unable to save edge layout." });
+        }
+
+        return new JsonResult(new
+        {
+            success = true,
+            savedNodes = filteredNodePositions.Count,
+            savedEdges = filteredEdgeAdjustments.Count
+        });
     }
 
     public IActionResult OnPostResetLayout()
@@ -244,5 +311,11 @@ public sealed class IndexModel(DependencyRepository repository, NodeShapeResolve
                 return false;
             }
         }
+    }
+
+    public sealed class LayoutSavePayload
+    {
+        public Dictionary<string, NodeLayoutPosition>? Nodes { get; set; }
+        public Dictionary<string, EdgeLayoutAdjustment>? Edges { get; set; }
     }
 }
